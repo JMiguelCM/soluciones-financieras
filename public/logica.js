@@ -120,6 +120,7 @@ export function leerPago(body, contrato) {
 // ---------- resumen por cliente (lista de clientes) ----------
 export const RESUMEN_VACIO = {
   contratos_activos: 0, saldo: 0, atrasado: false, dias_atraso: 0, cuota_hoy: 0, valor_atrasos: 0, por_cobrar_hoy: 0,
+  contratos: [], // nunca se modifica: los clientes con contratos reciben su propia lista
 };
 
 /** `pagos`: solo los no anulados. */
@@ -128,14 +129,27 @@ export function resumenPorCliente(contratos, pagos) {
   const resumen = new Map();
   for (const k of contratos) {
     const e = estadoContrato(k, pagosPorContrato.get(k.id) ?? []);
-    const r = resumen.get(k.cliente_id) ?? { ...RESUMEN_VACIO };
+    const r = resumen.get(k.cliente_id) ?? { ...RESUMEN_VACIO, contratos: [] };
     if (!estaCerrado(e.estado)) {
+      // lo que vence hoy y aún no se ha pagado
+      const cuotaHoy = e.plan.filter((c) => c.estado === 'hoy').reduce((s, c) => s + (c.valor - c.pagado), 0);
       r.contratos_activos += 1;
       r.saldo += e.saldo;
-      // lo que vence hoy y aún no se ha pagado
-      r.cuota_hoy += e.plan.filter((c) => c.estado === 'hoy').reduce((s, c) => s + (c.valor - c.pagado), 0);
+      r.cuota_hoy += cuotaHoy;
       r.valor_atrasos += e.valorAtrasos;
       r.por_cobrar_hoy = r.cuota_hoy + r.valor_atrasos;
+      // cada contrato activo por separado (la lista muestra una fila por contrato)
+      r.contratos.push({
+        id: k.id,
+        forma_pago: k.forma_pago,
+        valor_cuota: k.valor_cuota,
+        saldo: e.saldo,
+        atrasado: e.estado === 'atrasado',
+        dias_atraso: e.diasAtraso,
+        cuota_hoy: cuotaHoy,
+        valor_atrasos: e.valorAtrasos,
+        por_cobrar_hoy: cuotaHoy + e.valorAtrasos,
+      });
     }
     if (e.estado === 'atrasado') {
       r.atrasado = true;

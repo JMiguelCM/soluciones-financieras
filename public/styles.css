@@ -1,4 +1,4 @@
-/* ============ Tokens ============ */
+/* ============ Tokens (tema claro siempre) ============ */
 :root {
   --primario: #0d6b5a;
   --primario-hover: #0a5a4b;
@@ -21,26 +21,6 @@
   --radio: 12px;
   --radio-sm: 8px;
   color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --primario: #2fb391;
-    --primario-hover: #3cc6a2;
-    --primario-suave: #143a31;
-    --peligro: #f08a5d;
-    --fondo: #0d1311;
-    --superficie: #151d1a;
-    --superficie-2: #1a2420;
-    --borde: #25322d;
-    --borde-fuerte: #34443e;
-    --texto: #e7efec;
-    --texto-2: #b3c2bc;
-    --tenue: #82938d;
-    --sombra-1: 0 1px 2px rgba(0, 0, 0, .4);
-    --sombra-2: 0 12px 32px rgba(0, 0, 0, .5);
-    color-scheme: dark;
-  }
 }
 
 /* ============ Base ============ */
@@ -80,7 +60,6 @@ button { font: inherit; color: inherit; }
 .btn:disabled { opacity: .6; cursor: progress; }
 .btn-primario { background: var(--primario); color: #fff; }
 .btn-primario:hover { background: var(--primario-hover); }
-@media (prefers-color-scheme: dark) { .btn-primario { color: #06201a; } }
 .btn-secundario { background: var(--superficie); border-color: var(--borde-fuerte); color: var(--texto); }
 .btn-secundario:hover { background: var(--superficie-2); }
 
@@ -101,9 +80,6 @@ button { font: inherit; color: inherit; }
   background: hsl(var(--h) 55% 90%); color: hsl(var(--h) 55% 28%);
   font-weight: 700; font-size: .95rem; letter-spacing: .02em;
 }
-@media (prefers-color-scheme: dark) {
-  .avatar { background: hsl(var(--h) 35% 22%); color: hsl(var(--h) 60% 78%); }
-}
 .avatar-sm { width: 32px; height: 32px; font-size: .78rem; }
 .avatar-lg { width: 64px; height: 64px; font-size: 1.35rem; }
 
@@ -113,8 +89,6 @@ button { font: inherit; color: inherit; }
 }
 .logo { width: 34px; height: 34px; border-radius: 9px; font-size: .9rem; }
 .logo-grande { width: 64px; height: 64px; border-radius: 18px; font-size: 1.5rem; margin: 0 auto 16px; box-shadow: var(--sombra-2); }
-@media (prefers-color-scheme: dark) { .logo, .logo-grande { color: #06201a; } }
-
 /* ============ Ingreso ============ */
 .ingreso {
   min-height: 100vh; min-height: 100dvh;
@@ -264,8 +238,6 @@ input:focus, textarea:focus {
 .dias button strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 .dias button.es-hoy { border-color: var(--primario); color: var(--primario); }
 .dias button[aria-selected="true"] { background: var(--primario); border-color: var(--primario); color: #fff; }
-@media (prefers-color-scheme: dark) { .dias button[aria-selected="true"] { color: #06201a; } }
-
 .kpis-planilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .kpi strong.ok, .monto.ok { color: var(--ok); }
 .monto.tenue { color: var(--tenue); }
@@ -291,8 +263,6 @@ input:focus, textarea:focus {
 
 .btn-peligro { background: var(--peligro); color: #fff; }
 .btn-peligro:hover { filter: brightness(1.08); }
-@media (prefers-color-scheme: dark) { .btn-peligro { color: #1a0a04; } }
-
 .motivos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .motivos label { position: relative; cursor: pointer; margin: 0; }
 .motivos input { position: absolute; opacity: 0; width: 1px; height: 1px; min-height: 0; }
@@ -325,8 +295,6 @@ input:focus, textarea:focus {
 .kpi-principal { display: grid; gap: 4px; padding: 20px; margin-bottom: 12px; border-radius: 16px; background: var(--primario); color: #fff; box-shadow: var(--sombra-2); }
 .kpi-principal .sub { color: rgba(255, 255, 255, .8); }
 .kpi-principal strong { font-size: 2.2rem; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
-@media (prefers-color-scheme: dark) { .kpi-principal { color: #06201a; } .kpi-principal .sub { color: rgba(6, 32, 26, .75); } }
-
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
 .kpi { display: grid; gap: 2px; align-content: start; padding: 14px; border-radius: var(--radio); background: var(--superficie); border: 1px solid var(--borde); box-shadow: var(--sombra-1); }
 .kpi-titulo { font-size: .76rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tenue); }
@@ -423,8 +391,6 @@ mark { background: color-mix(in srgb, var(--acento) 35%, transparent); color: in
   display: grid; place-items: center; cursor: pointer; z-index: 9;
 }
 .fab .ic { width: 26px; height: 26px; }
-@media (prefers-color-scheme: dark) { .fab { color: #06201a; } }
-
 /* ============ Hojas (diálogos) ============ */
 .hoja {
   width: min(560px, calc(100vw - 32px));
@@ -516,8 +482,6 @@ legend { float: left; width: 100%; padding: 0; margin-bottom: 10px; font-size: .
   box-shadow: var(--sombra-2); z-index: 100; animation: aparecer .2s ease-out;
 }
 .aviso .ic { color: #5fd3b3; }
-@media (prefers-color-scheme: dark) { .aviso { background: #e7efec; color: #14201c; } .aviso .ic { color: var(--primario-hover); } }
-
 /* ============ Responsive ============ */
 .solo-movil { display: none; }
 
@@ -544,10 +508,6 @@ legend { float: left; width: 100%; padding: 0; margin-bottom: 10px; font-size: .
 
 /* ============ Contratos y pagos ============ */
 :root { --ok: #15803d; --ok-suave: #e4f4e9; --peligro-suave: #fdeee6; --aviso-c: #a16207; --aviso-suave: #fdf3dc; }
-@media (prefers-color-scheme: dark) {
-  :root { --ok: #4ade80; --ok-suave: #15301f; --peligro-suave: #3a1f14; --aviso-c: #fbbf24; --aviso-suave: #352a10; }
-}
-
 .hoja-top { position: relative; flex: none; display: flex; justify-content: flex-end; padding: 8px 10px 0; min-height: 48px; }
 .hoja-top .hoja-asa { position: absolute; left: 50%; top: 0; transform: translateX(-50%); }
 .hoja-top + #det-contenido .ficha-cabeza { padding-top: 0; }
@@ -769,3 +729,22 @@ fieldset > .tabla-resumen, fieldset > .segmentos, fieldset > .fila-2 { clear: bo
   .acciones-fila.acciones-3 .ic { display: none; }
 }
 .acciones-fila.acciones-1 > button { padding: 9px 18px; }
+
+/* ============ Cobro del día en azul ============ */
+:root { --azul: #1d6fd8; --azul-suave: #e8f1fd; --azul-borde: #b9d3f7; }
+.etiqueta-azul { background: var(--azul-suave); color: var(--azul); }
+.clientes .cobra-hoy { background: var(--azul-suave); }
+.cliente.cobra-hoy { box-shadow: inset 4px 0 0 var(--azul); }
+.cliente.cobra-hoy:hover { background: #dceafc; }
+.cliente.cobra-hoy .avatar { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--azul); }
+.fila-planilla.cobra-hoy { background: var(--azul-suave); box-shadow: inset 4px 0 0 var(--azul); }
+.fila-planilla.cobra-hoy .cliente:hover { background: transparent; }
+.contrato-chip { color: var(--primario); font-weight: 600; }
+
+/* ============ Mensaje de confirmación del pago ============ */
+.recibo-ok { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; padding: 12px 14px; border-radius: var(--radio); background: var(--ok-suave); color: var(--ok); }
+.recibo-ok[hidden] { display: none; }
+.recibo-ok strong { font-size: 1.05rem; }
+.recibo-texto { min-height: 150px; line-height: 1.5; background: var(--superficie-2); font-size: 16px; resize: none; }
+.pago-botones { display: flex; gap: 6px; flex: none; }
+#dlg-recibo .hoja-cuerpo label { display: block; font-size: .88rem; font-weight: 600; color: var(--texto-2); margin-bottom: 6px; }

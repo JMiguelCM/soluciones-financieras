@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0d6b5a">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="color-scheme" content="light only">
   <!-- iPhone: no convertir números en enlaces de llamada (los teléfonos son solo informativos) -->
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -455,6 +456,34 @@
         </button>
       </div>
     </form>
+  </dialog>
+
+  <!-- ===================== RECIBO / MENSAJE DEL PAGO ===================== -->
+  <dialog id="dlg-recibo" class="hoja hoja-form">
+    <div class="hoja-cabeza">
+      <div>
+        <h2 id="recibo-titulo">Pago registrado</h2>
+        <p class="sub" id="recibo-sub"></p>
+      </div>
+      <button class="btn-icono" type="button" data-cerrar aria-label="Cerrar">
+        <svg class="ic"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div class="hoja-cuerpo">
+      <div class="recibo-ok" id="recibo-ok">
+        <svg class="ic"><use href="#i-check"/></svg>
+        <strong id="recibo-valor"></strong>
+      </div>
+      <label for="recibo-texto">Mensaje para el cliente</label>
+      <textarea id="recibo-texto" class="recibo-texto" rows="7" readonly></textarea>
+      <p class="ayuda">Cópialo y pégalo en el chat del cliente.</p>
+    </div>
+    <div class="hoja-pie">
+      <button class="btn btn-secundario" type="button" data-cerrar>Cerrar</button>
+      <button class="btn btn-primario" type="button" id="btn-copiar-recibo">
+        <svg class="ic"><use href="#i-copy"/></svg> Copiar mensaje
+      </button>
+    </div>
   </dialog>
 
   <!-- ===================== INTERÉS DE MORA ===================== -->

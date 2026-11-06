@@ -1,6 +1,7 @@
 import {
   FORMAS_PAGO, cronograma, cuotaSugerida, primeraCuotaSugerida, estadoContrato, estaCerrado, hoyLocal, sumarDias, diasEntre,
 } from './calculos.js';
+import { resumenMora } from './logica.js';
 
 const $ = (sel) => document.querySelector(sel);
 const CLAVE_USUARIO = 'sf.usuario';
@@ -301,7 +302,8 @@ function pintarLista() {
   pintarSelectorRutas();
 
   const enRuta = (c) => !filtroRuta || (filtroRuta === 'sin' ? c.ruta == null : String(c.ruta) === filtroRuta);
-  const base = clientes.filter((c) => enRuta(c) && coincide(c, q, qDig));
+  // un cliente con varios contratos activos aparece una vez por cada contrato
+  const base = filasDeClientes(clientes).filter((c) => enRuta(c) && coincide(c, q, qDig));
   let visibles = base.filter(FILTROS[filtro].prueba);
   if (filtro === 'atrasados') visibles = [...visibles].sort((a, b) => b.dias_atraso - a.dias_atraso);
   if (filtro === 'hoy') visibles = [...visibles].sort((a, b) => (a.ruta ?? 1e9) - (b.ruta ?? 1e9) || a.nombre.localeCompare(b.nombre));
@@ -331,7 +333,7 @@ function pintarLista() {
     total.className = `total-filtro ${filtro === 'atrasados' ? 'tono-peligro' : filtro === 'hoy' ? 'tono-aviso' : ''}`;
     total.innerHTML = `
       <div><span class="sub">${t[0]}</span><strong>${pesos(t[1])}</strong></div>
-      <span class="sub">${visibles.length} ${visibles.length === 1 ? 'cliente' : 'clientes'}${t[2] ? ` · ${t[2]}` : ''}</span>`;
+      <span class="sub">${contarClientes(visibles)}${t[2] ? ` · ${t[2]}` : ''}</span>`;
   }
 
   const rutas = new Set(clientes.filter((c) => c.ruta != null).map((c) => c.ruta)).size;
@@ -342,20 +344,21 @@ function pintarLista() {
   const montoDe = (c) => (filtro === 'hoy' ? c.por_cobrar_hoy : filtro === 'atrasados' ? c.valor_atrasos : c.saldo);
 
   $('#lista-clientes').innerHTML = visibles.map((c) => `
-    <li><button class="cliente" type="button" data-id="${c.id}">
+    <li><button class="cliente ${c.cuota_hoy > 0 ? 'cobra-hoy' : ''}" type="button" data-id="${c.id}" ${c.contrato ? `data-contrato-fila="${c.contrato.id}"` : ''}>
       ${avatar(c.nombre)}
       <span class="cliente-info">
         <span class="cliente-nombre" style="display:block;text-transform:capitalize">${resaltar(c.nombre, q)}</span>
         <span class="cliente-sub">
           <span class="tel">${esc(formatoTel(c.telefono))}</span>
           ${c.ruta != null ? `<span class="tel ruta">Ruta ${esc(c.ruta)}</span>` : ''}
+          ${c.contrato ? `<span class="tel contrato-chip">${idCorto(c.contrato.id)} ${FORMAS_PAGO[c.contrato.forma_pago]}</span>` : ''}
         </span>
       </span>
       <span class="cliente-der">
         ${c.contratos_activos ? `<span class="monto">${pesos(montoDe(c))}</span>` : ''}
         ${c.atrasado
           ? `<span class="etiqueta etiqueta-peligro">${c.dias_atraso} d atraso</span>`
-          : c.cuota_hoy > 0 ? '<span class="etiqueta etiqueta-aviso">Cobra hoy</span>'
+          : c.cuota_hoy > 0 ? '<span class="etiqueta etiqueta-azul">Cobra hoy</span>'
             : c.contratos_activos ? '<span class="etiqueta etiqueta-ok">Al día</span>' : ''}
       </span>
       ${icono('chevron')}
@@ -377,8 +380,41 @@ $('#buscar').addEventListener('input', pintarLista);
 
 $('#lista-clientes').addEventListener('click', (e) => {
   const b = e.target.closest('[data-id]');
-  if (b) abrirFicha(clientes.find((c) => c.id === Number(b.dataset.id)));
+  if (!b) return;
+  const cliente = clientes.find((c) => c.id === Number(b.dataset.id));
+  if (b.dataset.contratoFila) {
+    // fila de un contrato: abre ese contrato (la flecha de volver lleva a la ficha del cliente)
+    clienteAbierto = cliente;
+    abrirContrato(Number(b.dataset.contratoFila)).catch((ex) => aviso(ex.message));
+  } else {
+    abrirFicha(cliente);
+  }
 });
+
+/** Una fila por cada contrato activo del cliente; si no tiene ninguno, una sola fila. */
+function filasDeClientes(lista) {
+  return lista.flatMap((c) => {
+    const ks = c.contratos ?? [];
+    if (!ks.length) return [{ ...c, contrato: null }];
+    return ks.map((k) => ({
+      ...c,
+      contrato: k,
+      contratos_activos: 1,
+      saldo: k.saldo,
+      atrasado: k.atrasado,
+      dias_atraso: k.dias_atraso,
+      cuota_hoy: k.cuota_hoy,
+      valor_atrasos: k.valor_atrasos,
+      por_cobrar_hoy: k.por_cobrar_hoy,
+    }));
+  });
+}
+
+function contarClientes(filas) {
+  const n = new Set(filas.map((f) => f.id)).size;
+  const contratos = filas.filter((f) => f.contrato).length;
+  return `${n} ${n === 1 ? 'cliente' : 'clientes'}${contratos > n ? ` · ${contratos} contratos` : ''}`;
+}
 
 // ================= ficha =================
 function dato(ic, titulo, valoresHtml) {
@@ -524,7 +560,7 @@ function pintarContrato(k) {
           <div class="sub">${fechaCorta(p.fecha)} · ${esc(capital(p.creado_por_nombre ?? ''))}${p.observacion ? ` · ${esc(p.observacion)}` : ''}</div>
           ${p.anulado ? `<div class="sub">Anulado por ${esc(capital(p.anulado_por_nombre ?? ''))} el ${esc(p.anulado_en)}</div>` : ''}
         </div>
-        ${p.anulado ? '<span class="etiqueta etiqueta-gris">Anulado</span>' : `<button class="btn-chico btn-chico-peligro" type="button" data-anular="${p.id}">Anular</button>`}
+        ${p.anulado ? '<span class="etiqueta etiqueta-gris">Anulado</span>' : `<span class="pago-botones"><button class="btn-chico" type="button" data-recibo="${p.id}">${icono('copy')} Mensaje</button><button class="btn-chico btn-chico-peligro" type="button" data-anular="${p.id}">Anular</button></span>`}
       </li>`).join('')
     : '<p class="sub vacio-chico">Aún no hay pagos registrados.</p>';
 
@@ -678,6 +714,11 @@ $('#det-contenido').addEventListener('click', async (e) => {
   const tarjeta = e.target.closest('[data-contrato]');
   if (tarjeta) {
     abrirContrato(Number(tarjeta.dataset.contrato)).catch((ex) => aviso(ex.message));
+    return;
+  }
+  const recibo = e.target.closest('[data-recibo]');
+  if (recibo) {
+    abrirRecibo(contratoAbierto, Number(recibo.dataset.recibo), false);
     return;
   }
   const anularMora = e.target.closest('[data-anular-mora]');
@@ -970,13 +1011,63 @@ formP.addEventListener('submit', async (e) => {
     pintarContrato(k);
     cargarClientes();
     if (pagina === 'planilla') cargarPlanilla();
-    aviso(k.estado.estado === 'pagado' ? '¡Contrato pagado por completo!' : `Pago de ${pesos(abono + mora)} registrado`);
+    const nuevo = k.pagos.filter((p) => !p.anulado).reduce((a, b) => (b.id > a.id ? b : a));
+    abrirRecibo(k, nuevo.id, true);
   } catch (ex) {
     if (ex.campos) mostrarErroresCampos(formP, ex.campos);
     else aviso(ex.message);
   } finally {
     btn.disabled = false;
   }
+});
+
+// ================= mensaje de confirmación del pago =================
+const dias = (n) => `${n} ${n === 1 ? 'día' : 'días'}`;
+const orden = (a, b) => (a.fecha === b.fecha ? a.id - b.id : a.fecha < b.fecha ? -1 : 1);
+
+/**
+ * Texto para enviarle al cliente. Usa el estado del contrato justo antes y justo después
+ * de ese pago (así sirve también para pagos viejos del historial).
+ */
+function mensajePago(k, pagoId) {
+  const validos = k.pagos.filter((p) => !p.anulado).sort(orden);
+  const i = validos.findIndex((p) => p.id === pagoId);
+  const pago = validos[i];
+  const antes = validos.slice(0, i);
+  const hasta = validos.slice(0, i + 1);
+  const base = { ...k, refinanciado_por_id: null }; // el mensaje refleja el momento del pago
+  const eAntes = estadoContrato(base, antes, pago.fecha);
+  const eDespues = estadoContrato(base, hasta, pago.fecha);
+  const morasHasta = (k.moras ?? []).filter((m) => m.fecha <= pago.fecha);
+  const moraDespues = resumenMora(k, hasta, morasHasta).saldo;
+  const nombre = String(k.cliente_nombre ?? '').toUpperCase();
+  const total = pago.abono + (pago.int_mora || 0);
+
+  return [
+    `Hola ${nombre}.`,
+    `[Antes del abono usted presentaba ${dias(eAntes.diasAtraso)} de atraso]`,
+    `Confirmamos tu pago por ${pesos(total)}.`,
+    `[Crédito: ${pesos(pago.abono)} Interes mora: ${pesos(pago.int_mora || 0)}].`,
+    `Cuotas pagas: ${eDespues.cuotasPagas}.`,
+    `Cuotas Pendientes: ${eDespues.cuotasPendientes}.`,
+    `Saldo actual ${pesos(eDespues.saldo)}.`,
+    moraDespues ? `Saldo int. mora ${pesos(moraDespues)}.` : '',
+  ].filter(Boolean).join(' ');
+}
+
+function abrirRecibo(k, pagoId, recienRegistrado) {
+  const pago = k.pagos.find((p) => p.id === pagoId);
+  $('#recibo-titulo').textContent = recienRegistrado ? 'Pago registrado' : 'Mensaje del pago';
+  $('#recibo-sub').textContent = `Contrato ${idCorto(k.id)} · ${capital(k.cliente_nombre)} · ${fechaCorta(pago.fecha)}`;
+  $('#recibo-ok').hidden = !recienRegistrado;
+  $('#recibo-valor').textContent = `${pesos(pago.abono + (pago.int_mora || 0))} recibidos${k.estado.estado === 'pagado' ? ' · ¡contrato pagado!' : ''}`;
+  $('#recibo-texto').value = mensajePago(k, pagoId);
+  $('#dlg-recibo').showModal();
+}
+
+$('#btn-copiar-recibo').addEventListener('click', async () => {
+  await copiar($('#recibo-texto').value);
+  aviso('Mensaje copiado');
 });
 
 // ================= interés de mora =================
@@ -1304,7 +1395,7 @@ function filaPlanilla(f) {
   const acciones = botones.length ? `<div class="acciones-fila acciones-${botones.length}">${botones.join('')}</div>` : '';
 
   return `
-    <li class="fila-planilla">
+    <li class="fila-planilla ${esHoy && f.cuota && f.cuota.estado !== 'pagada' ? 'cobra-hoy' : ''}">
       <button class="cliente" type="button" data-contrato="${f.contrato_id}">
         ${avatar(f.cliente_nombre)}
         <span class="cliente-info">
@@ -1567,6 +1658,23 @@ if (MODO_DEMO) {
     location.reload();
   });
 }
+
+// ================= cambio de día =================
+// Si la app queda abierta y cambia la fecha (medianoche), se recalcula quién cobra hoy:
+// el azul pasa a los clientes del nuevo día y la planilla salta al día nuevo.
+let diaActual = hoyLocal();
+function revisarCambioDeDia() {
+  const hoy = hoyLocal();
+  if (hoy === diaActual || !usuario) return;
+  const planillaEnHoy = fechaPlanilla === diaActual;
+  diaActual = hoy;
+  cargarClientes();
+  if (planillaEnHoy) fechaPlanilla = hoy;
+  if (pagina === 'planilla') cargarPlanilla();
+  if (pagina === 'totales') cargarTotales();
+}
+setInterval(revisarCambioDeDia, 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) revisarCambioDeDia(); });
 
 // ================= filtros detrás del botón ☰ =================
 function prepararMenu(botonId, panelId, esFiltroPorDefecto) {
