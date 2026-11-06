@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
 import {
   mayus, leerUsuario, leerCliente, leerContrato, leerPago, resumenPorCliente, calcularTotales,
-  armarContrato, RESUMEN_VACIO, ERROR_CAMPOS,
+  armarContrato, calcularPlanilla, RESUMEN_VACIO, ERROR_CAMPOS,
 } from './public/logica.js';
+import { hoyLocal } from './public/calculos.js';
 
 const app = express();
 const raiz = dirname(fileURLToPath(import.meta.url));
@@ -102,6 +103,15 @@ app.put('/api/clientes/:id', (req, res) => {
 app.get('/api/totales', (req, res) => {
   const contratos = db.prepare('SELECT k.*, c.ruta FROM contratos k JOIN clientes c ON c.id = k.cliente_id').all();
   res.json(calcularTotales(contratos, pagosValidos(), String(req.query.ruta ?? '')));
+});
+
+// ---------- planilla del día ----------
+app.get('/api/planilla', (req, res) => {
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.fecha)) ? String(req.query.fecha) : hoyLocal();
+  const contratos = db.prepare(`
+    SELECT k.*, c.nombre AS cliente_nombre, c.ruta, c.telefono, c.direccion
+    FROM contratos k JOIN clientes c ON c.id = k.cliente_id`).all();
+  res.json(calcularPlanilla(contratos, pagosValidos(), fecha, String(req.query.ruta ?? '')));
 });
 
 // ---------- contratos ----------

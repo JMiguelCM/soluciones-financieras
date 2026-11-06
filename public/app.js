@@ -1,5 +1,5 @@
 import {
-  FORMAS_PAGO, cronograma, cuotaSugerida, primeraCuotaSugerida, estadoContrato, hoyLocal,
+  FORMAS_PAGO, cronograma, cuotaSugerida, primeraCuotaSugerida, estadoContrato, hoyLocal, sumarDias, diasEntre,
 } from './calculos.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -622,6 +622,7 @@ $('#det-contenido').addEventListener('click', async (e) => {
       const k = await api('POST', `/api/pagos/${p.id}/anular`);
       pintarContrato(k);
       cargarClientes();
+      if (pagina === 'planilla') cargarPlanilla();
       aviso('Pago anulado');
     } catch (ex) {
       aviso(ex.message);
@@ -760,8 +761,11 @@ function abrirPago(k) {
   const rapidos = [];
   const faltaCuota = k.valor_cuota - e.picos;
   rapidos.push([e.picos ? `Completar cuota ${pesos(faltaCuota)}` : `1 cuota ${pesos(k.valor_cuota)}`, Math.min(faltaCuota, e.saldo)]);
-  if (e.valorAtrasos > 0 && e.valorAtrasos !== faltaCuota) rapidos.push([`Ponerse al día ${pesos(e.valorAtrasos)}`, e.valorAtrasos]);
-  rapidos.push([`Todo el saldo ${pesos(e.saldo)}`, e.saldo]);
+  if (e.valorAtrasos > 0 && e.valorAtrasos !== faltaCuota) rapidos.push([`Atrasos ${pesos(e.valorAtrasos)}`, e.valorAtrasos]);
+  const deHoy = (e.plan ?? []).filter((c) => c.estado === 'hoy').reduce((s, c) => s + c.valor - c.pagado, 0);
+  const conHoy = Math.min(e.saldo, e.valorAtrasos + deHoy);
+  if (e.valorAtrasos > 0 && deHoy > 0) rapidos.push([`Atrasos + hoy ${pesos(conHoy)}`, conHoy]);
+  if (!rapidos.some(([, v]) => v === e.saldo)) rapidos.push([`Todo el saldo ${pesos(e.saldo)}`, e.saldo]);
   $('#p-rapidos').innerHTML = rapidos.map(([t, v]) => `<button type="button" data-valor="${v}">${t}</button>`).join('');
 
   formP.elements.fecha.value = hoyLocal();
@@ -825,6 +829,7 @@ formP.addEventListener('submit', async (e) => {
     $('#dlg-pago').close();
     pintarContrato(k);
     cargarClientes();
+    if (pagina === 'planilla') cargarPlanilla();
     aviso(k.estado.estado === 'pagado' ? '¡Contrato pagado por completo!' : `Pago de ${pesos(abono + mora)} registrado`);
   } catch (ex) {
     if (ex.campos) mostrarErroresCampos(formP, ex.campos);
@@ -976,6 +981,7 @@ let pagina = 'clientes';
 function irA(nueva) {
   pagina = nueva;
   $('#pagina-clientes').hidden = nueva !== 'clientes';
+  $('#pagina-planilla').hidden = nueva !== 'planilla';
   $('#pagina-totales').hidden = nueva !== 'totales';
   $('#fab-nuevo').hidden = nueva !== 'clientes';
   document.querySelectorAll('.pestanas [data-pagina]').forEach((b) => {
@@ -984,7 +990,176 @@ function irA(nueva) {
   });
   window.scrollTo(0, 0);
   if (nueva === 'totales') cargarTotales();
+  if (nueva === 'planilla') cargarPlanilla();
 }
+
+// ================= planilla del día =================
+let fechaPlanilla = hoyLocal();
+let vistaPlanilla = 'pendientes';
+let planilla = null;
+
+const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const diaSemana = (s) => new Date(`${s}T00:00:00Z`).getUTCDay();
+function lunesDe(s) {
+  const d = diaSemana(s);
+  return sumarDias(s, d === 0 ? -6 : 1 - d);
+}
+function fechaLarga(s) {
+  return new Date(`${s}T00:00:00Z`).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+}
+
+function pintarDias() {
+  const hoy = hoyLocal();
+  const lunes = lunesDe(fechaPlanilla);
+  $('#planilla-dias').innerHTML = Array.from({ length: 7 }, (_, i) => {
+    const f = sumarDias(lunes, i);
+    return `<button type="button" role="tab" data-fecha="${f}" aria-selected="${f === fechaPlanilla}" class="${f === hoy ? 'es-hoy' : ''}">
+      <span>${f === hoy ? 'Hoy' : DIAS[diaSemana(f)]}</span><strong>${Number(f.slice(8))}</strong>
+    </button>`;
+  }).join('');
+}
+
+$('#planilla-dias').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-fecha]');
+  if (!b) return;
+  fechaPlanilla = b.dataset.fecha;
+  cargarPlanilla();
+});
+$('#semana-anterior').addEventListener('click', () => { fechaPlanilla = sumarDias(fechaPlanilla, -7); cargarPlanilla(); });
+$('#semana-siguiente').addEventListener('click', () => { fechaPlanilla = sumarDias(fechaPlanilla, 7); cargarPlanilla(); });
+
+$('#planilla-ruta').addEventListener('change', (e) => {
+  filtroRuta = e.target.value;
+  guardarPreferencia('sf.ruta', filtroRuta);
+  pintarLista();
+  cargarPlanilla();
+});
+
+$('#planilla-filtros').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-vista]');
+  if (!b) return;
+  vistaPlanilla = b.dataset.vista;
+  pintarPlanilla();
+});
+
+async function cargarPlanilla() {
+  pintarDias();
+  const sel = $('#planilla-ruta');
+  sel.innerHTML = $('#filtro-ruta').innerHTML;
+  sel.value = filtroRuta;
+  sel.closest('.selector-ruta').classList.toggle('activo', Boolean(filtroRuta));
+  const hoy = hoyLocal();
+  const cuando = fechaPlanilla === hoy ? 'Hoy' : fechaPlanilla < hoy ? 'Pasado' : 'Próximo';
+  $('#planilla-fecha').textContent = `${cuando}: ${fechaLarga(fechaPlanilla)} · ${filtroRuta ? (filtroRuta === 'sin' ? 'sin ruta' : `ruta ${filtroRuta}`) : 'todas las rutas'}`;
+  try {
+    const params = new URLSearchParams({ fecha: fechaPlanilla, ...(filtroRuta ? { ruta: filtroRuta } : {}) });
+    planilla = await api('GET', `/api/planilla?${params}`);
+    pintarPlanilla();
+  } catch (ex) {
+    $('#planilla-lista').innerHTML = `<li class="error-campo" style="padding:16px">${esc(ex.message)}</li>`;
+  }
+}
+
+const textoAtraso = (dias) => `Lleva ${dias} ${dias === 1 ? 'día' : 'días'} de atraso`;
+
+function filaPlanilla(f) {
+  const pasado = f.situacion === 'pago' || f.situacion === 'no_pago';
+  let etiqueta;
+  let monto;
+  if (f.situacion === 'atrasado') {
+    etiqueta = `<span class="etiqueta etiqueta-peligro">${textoAtraso(f.dias_atraso)}</span>`;
+    monto = `<span class="monto">${pesos(f.a_cobrar)}</span>`;
+  } else if (f.situacion === 'pendiente') {
+    etiqueta = `<span class="etiqueta etiqueta-aviso">${f.cuota?.pagado ? `Abonó ${pesos(f.cuota.pagado)}` : 'Cuota del día'}</span>`;
+    monto = `<span class="monto">${pesos(f.a_cobrar)}</span>`;
+  } else if (f.situacion === 'no_pago') {
+    const dias = diasEntre(f.cuota.fecha, hoyLocal());
+    etiqueta = `<span class="etiqueta etiqueta-peligro">${f.cuota.pagado ? `Abonó ${pesos(f.cuota.pagado)}` : 'No pagó'}${f.dias_atraso ? ` · ${dias} ${dias === 1 ? 'día' : 'días'}` : ''}</span>`;
+    monto = `<span class="monto tenue">${pesos(f.cuota.valor - f.cuota.pagado)}</span>`;
+  } else {
+    const adelantada = f.situacion === 'cubierto' && !f.pagado_dia;
+    etiqueta = `<span class="etiqueta etiqueta-ok">${adelantada ? 'Ya está cubierta' : 'Pagó'}</span>`;
+    monto = f.pagado_dia ? `<span class="monto ok">${pesos(f.pagado_dia)}</span>` : '';
+  }
+  const detalle = [
+    `${idCorto(f.contrato_id)} ${FORMAS_PAGO[f.forma_pago]}`,
+    f.cuota ? `cuota ${pesos(f.valor_cuota)}` : 'sin cuota hoy',
+    f.ruta != null ? `Ruta ${f.ruta}` : null,
+  ].filter(Boolean).join(' · ');
+  const puedeCobrar = !pasado && f.situacion !== 'cubierto';
+
+  return `
+    <li class="fila-planilla">
+      <button class="cliente" type="button" data-contrato="${f.contrato_id}">
+        ${avatar(f.cliente_nombre)}
+        <span class="cliente-info">
+          <span class="cliente-nombre" style="text-transform:capitalize">${esc(bonito(f.cliente_nombre))}</span>
+          <span class="fila-etiqueta">${etiqueta}</span>
+          <span class="cliente-sub"><span>${esc(detalle)}</span></span>
+          <span class="cliente-sub"><span style="text-transform:capitalize">${esc(bonito(f.direccion ?? ''))}</span></span>
+        </span>
+        <span class="cliente-der">${monto}</span>
+      </button>
+      ${puedeCobrar ? `<button class="btn-cobrar" type="button" data-cobrar="${f.contrato_id}">${icono('cash')} Cobrar</button>` : ''}
+    </li>`;
+}
+
+function pintarPlanilla() {
+  if (!planilla) return;
+  const { filas, resumen, fecha, hoy } = planilla;
+  const grupos = {
+    pendientes: filas.filter((f) => ['atrasado', 'pendiente', 'no_pago'].includes(f.situacion)),
+    cubiertos: filas.filter((f) => ['cubierto', 'pago'].includes(f.situacion)),
+    todos: filas,
+  };
+  document.querySelectorAll('#planilla-filtros [data-vista]').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.vista === vistaPlanilla));
+    b.querySelector('span').textContent = grupos[b.dataset.vista].length;
+  });
+
+  const esPasado = fecha < hoy;
+  $('#planilla-resumen').innerHTML = filas.length ? `
+    <div class="kpis kpis-planilla">
+      <div class="kpi ${esPasado ? '' : 'tono-aviso'}">
+        <span class="kpi-titulo">${esPasado ? 'Cuotas del día' : 'Por cobrar'}</span>
+        <strong>${pesos(esPasado ? resumen.cuotas_dia : resumen.a_cobrar)}</strong>
+        <span class="kpi-nota">${resumen.clientes} ${resumen.clientes === 1 ? 'cliente' : 'clientes'}</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-titulo">Recaudado ese día</span>
+        <strong class="ok">${pesos(resumen.recaudado)}</strong>
+        <span class="kpi-nota">${resumen.cubiertos} de ${resumen.contratos} al día</span>
+      </div>
+    </div>` : '';
+
+  const visibles = grupos[vistaPlanilla];
+  $('#planilla-lista').innerHTML = visibles.map(filaPlanilla).join('');
+  const vacio = $('#planilla-vacio');
+  vacio.hidden = visibles.length > 0;
+  if (!visibles.length) {
+    $('#planilla-vacio-titulo').textContent = filas.length ? 'Nada en esta lista' : 'Sin cobros este día';
+    $('#planilla-vacio-texto').textContent = filas.length
+      ? (vistaPlanilla === 'pendientes' ? 'Todos los de este día ya están cubiertos.' : 'Todavía nadie ha pagado este día.')
+      : `No hay cuotas para el ${fechaLarga(fecha)}${filtroRuta ? ' en esta ruta' : ''}.`;
+  }
+}
+
+$('#planilla-lista').addEventListener('click', async (e) => {
+  const cobrar = e.target.closest('[data-cobrar]');
+  const abrir = e.target.closest('[data-contrato]');
+  try {
+    if (cobrar) {
+      const k = await api('GET', `/api/contratos/${cobrar.dataset.cobrar}`);
+      contratoAbierto = k;
+      pintarContrato(k); // deja lista la ficha del contrato para cuando se guarde el pago
+      abrirPago(k);
+    } else if (abrir) {
+      await abrirContrato(Number(abrir.dataset.contrato));
+    }
+  } catch (ex) {
+    aviso(ex.message);
+  }
+});
 
 $('.pestanas').addEventListener('click', (e) => {
   const b = e.target.closest('[data-pagina]');

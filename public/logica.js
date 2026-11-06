@@ -192,6 +192,76 @@ export function calcularTotales(contratos, pagos, ruta = '') {
   };
 }
 
+// ---------- planilla del día ----------
+/**
+ * Clientes a cobrar en `fecha`: los que tienen una cuota ese día y, si la fecha es hoy o futura,
+ * también los atrasados (siguen debiendo hasta que paguen).
+ * `contratos` con datos del cliente (cliente_nombre, ruta, telefono, direccion); `pagos` solo los no anulados.
+ */
+export function calcularPlanilla(contratos, pagos, fecha, ruta = '') {
+  const hoy = hoyLocal();
+  const porContrato = agrupar(pagos, (p) => p.contrato_id);
+  const filas = [];
+
+  for (const k of contratos) {
+    if (ruta && (ruta === 'sin' ? k.ruta != null : String(k.ruta) !== ruta)) continue;
+    const lista = porContrato.get(k.id) ?? [];
+    const e = estadoContrato(k, lista);
+    const cuota = e.plan.find((c) => c.fecha === fecha) ?? null;
+    const atrasadoVigente = fecha >= hoy && e.estado === 'atrasado';
+    if (!cuota && !atrasadoVigente) continue;
+
+    const pendienteCuota = cuota && cuota.estado !== 'pagada' ? cuota.valor - cuota.pagado : 0;
+    const aCobrar = fecha >= hoy ? pendienteCuota + e.valorAtrasos : 0;
+    const pagadoDia = lista.filter((p) => p.fecha === fecha).reduce((s, p) => s + p.abono + (p.int_mora || 0), 0);
+
+    let situacion;
+    if (fecha < hoy) situacion = cuota.estado === 'pagada' ? 'pago' : 'no_pago';
+    else if (aCobrar > 0) situacion = e.estado === 'atrasado' ? 'atrasado' : 'pendiente';
+    else situacion = 'cubierto'; // ya pagó o va adelantado
+
+    filas.push({
+      contrato_id: k.id,
+      cliente_id: k.cliente_id,
+      cliente_nombre: k.cliente_nombre,
+      ruta: k.ruta,
+      telefono: k.telefono,
+      direccion: k.direccion,
+      forma_pago: k.forma_pago,
+      valor_cuota: k.valor_cuota,
+      cuota,
+      cuotas_atraso: e.cuotasAtraso,
+      dias_atraso: e.diasAtraso,
+      valor_atrasos: e.valorAtrasos,
+      a_cobrar: aCobrar,
+      pagado_dia: pagadoDia,
+      saldo: e.saldo,
+      situacion,
+    });
+  }
+
+  const orden = { atrasado: 0, pendiente: 1, no_pago: 2, cubierto: 3, pago: 4 };
+  filas.sort((a, b) => orden[a.situacion] - orden[b.situacion]
+    || (a.ruta ?? 1e9) - (b.ruta ?? 1e9)
+    || a.cliente_nombre.localeCompare(b.cliente_nombre));
+
+  const suma = (campo, f = filas) => f.reduce((s, x) => s + (x[campo] || 0), 0);
+  return {
+    fecha,
+    hoy,
+    filas,
+    resumen: {
+      clientes: new Set(filas.map((f) => f.cliente_id)).size,
+      contratos: filas.length,
+      a_cobrar: suma('a_cobrar'),
+      cuotas_dia: filas.reduce((s, f) => s + (f.cuota?.valor ?? 0), 0),
+      recaudado: suma('pagado_dia'),
+      pendientes: filas.filter((f) => ['atrasado', 'pendiente', 'no_pago'].includes(f.situacion)).length,
+      cubiertos: filas.filter((f) => ['cubierto', 'pago'].includes(f.situacion)).length,
+    },
+  };
+}
+
 /** Contrato con su estado y la lista de pagos ordenada (más reciente primero). */
 export function armarContrato(k, pagos) {
   const ordenados = [...pagos].sort((a, b) => (a.fecha === b.fecha ? b.id - a.id : a.fecha < b.fecha ? 1 : -1));

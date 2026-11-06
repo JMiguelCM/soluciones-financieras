@@ -3,8 +3,9 @@
 import { generarDemo } from './demo-datos.js';
 import {
   leerUsuario, leerCliente, leerContrato, leerPago, resumenPorCliente, calcularTotales,
-  armarContrato, ahoraLocal, RESUMEN_VACIO, ERROR_CAMPOS,
+  armarContrato, calcularPlanilla, ahoraLocal, RESUMEN_VACIO, ERROR_CAMPOS,
 } from './logica.js';
+import { hoyLocal } from './calculos.js';
 
 const CLAVE = 'sf.demo.datos.v1';
 let datos = cargar();
@@ -123,6 +124,16 @@ function enrutar(metodo, recurso, id, sub, b, query, usuarioId) {
   if (recurso === 'totales' && metodo === 'GET') {
     const contratos = datos.contratos.map((k) => ({ ...k, ruta: datos.clientes.find((c) => c.id === k.cliente_id)?.ruta ?? null }));
     return calcularTotales(contratos, pagosValidos(), query.get('ruta') ?? '');
+  }
+
+  // planilla del día
+  if (recurso === 'planilla' && metodo === 'GET') {
+    const fecha = /^\d{4}-\d{2}-\d{2}$/.test(query.get('fecha') ?? '') ? query.get('fecha') : hoyLocal();
+    const contratos = datos.contratos.map((k) => {
+      const c = datos.clientes.find((x) => x.id === k.cliente_id) ?? {};
+      return { ...k, cliente_nombre: c.nombre, ruta: c.ruta ?? null, telefono: c.telefono, direccion: c.direccion };
+    });
+    return calcularPlanilla(contratos, pagosValidos(), fecha, query.get('ruta') ?? '');
   }
 
   // contratos

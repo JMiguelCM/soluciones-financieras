@@ -250,6 +250,43 @@ input:focus, textarea:focus {
 .pestanas button { border: 0; background: transparent; padding: 6px 14px; border-radius: 7px; font-size: .9rem; font-weight: 600; color: var(--texto-2); cursor: pointer; }
 .pestanas button[aria-current="page"] { background: var(--superficie); color: var(--texto); box-shadow: var(--sombra-1); }
 
+/* Planilla del día */
+.semana { display: flex; align-items: center; gap: 4px; margin-bottom: 14px; }
+.dias { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.dias button {
+  display: grid; justify-items: center; gap: 1px; padding: 7px 0; cursor: pointer;
+  border-radius: 10px; border: 1px solid var(--borde); background: var(--superficie); color: var(--texto-2);
+}
+.dias button span { font-size: .72rem; font-weight: 600; }
+.dias button strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.dias button.es-hoy { border-color: var(--primario); color: var(--primario); }
+.dias button[aria-selected="true"] { background: var(--primario); border-color: var(--primario); color: #fff; }
+@media (prefers-color-scheme: dark) { .dias button[aria-selected="true"] { color: #06201a; } }
+
+.kpis-planilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kpi strong.ok, .monto.ok { color: var(--ok); }
+.monto.tenue { color: var(--tenue); }
+
+.planilla .fila-planilla { position: relative; }
+.planilla .cliente-sub span { white-space: normal; }
+.planilla .cliente { align-items: flex-start; }
+.planilla .cliente-der { padding-top: 2px; }
+.planilla .monto { font-size: 1rem; }
+.fila-etiqueta { display: flex; margin: 4px 0 2px; }
+.btn-cobrar {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: calc(100% - 32px); margin: -4px 16px 12px; padding: 9px; cursor: pointer;
+  border-radius: var(--radio-sm); border: 1px solid color-mix(in srgb, var(--primario) 35%, transparent);
+  background: var(--primario-suave); color: var(--primario); font-weight: 700; font-size: .9rem;
+}
+.btn-cobrar .ic { width: 18px; height: 18px; }
+.btn-cobrar:hover { border-color: var(--primario); }
+
+@media (max-width: 640px) {
+  .topbar .pestanas button { padding: 6px 9px; font-size: .84rem; }
+  .semana .btn-icono { width: 30px; height: 30px; }
+}
+
 /* Totales */
 .kpi-principal { display: grid; gap: 4px; padding: 20px; margin-bottom: 12px; border-radius: 16px; background: var(--primario); color: #fff; box-shadow: var(--sombra-2); }
 .kpi-principal .sub { color: rgba(255, 255, 255, .8); }
