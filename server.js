@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
 import {
   mayus, leerUsuario, leerCliente, leerContrato, leerPago, resumenPorCliente, calcularTotales,
-  armarContrato, calcularPlanilla, RESUMEN_VACIO, ERROR_CAMPOS,
+  armarContrato, calcularPlanilla, leerVisita, RESUMEN_VACIO, ERROR_CAMPOS,
 } from './public/logica.js';
 import { hoyLocal } from './public/calculos.js';
 
@@ -111,7 +111,10 @@ app.get('/api/planilla', (req, res) => {
   const contratos = db.prepare(`
     SELECT k.*, c.nombre AS cliente_nombre, c.ruta, c.telefono, c.direccion
     FROM contratos k JOIN clientes c ON c.id = k.cliente_id`).all();
-  res.json(calcularPlanilla(contratos, pagosValidos(), fecha, String(req.query.ruta ?? '')));
+  const visitas = db.prepare(`
+    SELECT v.*, u.nombre AS creado_por_nombre FROM visitas v LEFT JOIN usuarios u ON u.id = v.creado_por
+    WHERE v.anulado = 0 AND v.fecha = ?`).all(fecha);
+  res.json(calcularPlanilla(contratos, pagosValidos(), fecha, String(req.query.ruta ?? ''), visitas));
 });
 
 // ---------- contratos ----------
@@ -125,7 +128,11 @@ function contratoCompleto(id) {
     SELECT p.*, u.nombre AS creado_por_nombre, ua.nombre AS anulado_por_nombre
     FROM pagos p LEFT JOIN usuarios u ON u.id = p.creado_por LEFT JOIN usuarios ua ON ua.id = p.anulado_por
     WHERE p.contrato_id = ?`).all(id);
-  return armarContrato(k, pagos);
+  const visitas = db.prepare(`
+    SELECT v.*, u.nombre AS creado_por_nombre, ua.nombre AS anulado_por_nombre
+    FROM visitas v LEFT JOIN usuarios u ON u.id = v.creado_por LEFT JOIN usuarios ua ON ua.id = v.anulado_por
+    WHERE v.contrato_id = ?`).all(id);
+  return armarContrato(k, pagos, visitas);
 }
 
 app.get('/api/clientes/:id/contratos', (req, res) => {
@@ -184,6 +191,32 @@ app.post('/api/pagos/:id/anular', (req, res) => {
   db.prepare(`UPDATE pagos SET anulado = 1, anulado_por = ?, anulado_en = datetime('now', 'localtime') WHERE id = ?`)
     .run(usuario.id, p.id);
   res.json(contratoCompleto(p.contrato_id));
+});
+
+// ---------- visitas sin pago ("No pagó") ----------
+app.post('/api/contratos/:id/visitas', (req, res) => {
+  const usuario = usuarioActual(req);
+  if (!usuario) return res.status(401).json({ error: 'Ingrese con un usuario.' });
+  const k = contratoCompleto(Number(req.params.id));
+  if (!k) return res.status(404).json({ error: 'Contrato no encontrado.' });
+
+  const { v, errores } = leerVisita(req.body ?? {}, k);
+  if (hayErrores(errores)) return responderErrores(res, errores);
+
+  db.prepare('INSERT INTO visitas (contrato_id, fecha, motivo, observacion, creado_por) VALUES (?, ?, ?, ?, ?)')
+    .run(k.id, v.fecha, v.motivo, v.observacion, usuario.id);
+  res.status(201).json(contratoCompleto(k.id));
+});
+
+app.post('/api/visitas/:id/anular', (req, res) => {
+  const usuario = usuarioActual(req);
+  if (!usuario) return res.status(401).json({ error: 'Ingrese con un usuario.' });
+  const v = db.prepare('SELECT * FROM visitas WHERE id = ?').get(Number(req.params.id));
+  if (!v) return res.status(404).json({ error: 'Visita no encontrada.' });
+  if (v.anulado) return res.status(409).json({ error: 'Esa visita ya estaba anulada.' });
+  db.prepare(`UPDATE visitas SET anulado = 1, anulado_por = ?, anulado_en = datetime('now', 'localtime') WHERE id = ?`)
+    .run(usuario.id, v.id);
+  res.json(contratoCompleto(v.contrato_id));
 });
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Ruta no encontrada.' }));

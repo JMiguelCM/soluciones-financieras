@@ -196,11 +196,18 @@ export function calcularTotales(contratos, pagos, ruta = '') {
 /**
  * Clientes a cobrar en `fecha`: los que tienen una cuota ese día y, si la fecha es hoy o futura,
  * también los atrasados (siguen debiendo hasta que paguen).
- * `contratos` con datos del cliente (cliente_nombre, ruta, telefono, direccion); `pagos` solo los no anulados.
+ * `contratos` con datos del cliente (cliente_nombre, ruta, telefono, direccion);
+ * `pagos` y `visitas` solo los no anulados (visitas = "no pagó" registrados por el cobrador).
  */
-export function calcularPlanilla(contratos, pagos, fecha, ruta = '') {
+export function calcularPlanilla(contratos, pagos, fecha, ruta = '', visitas = []) {
   const hoy = hoyLocal();
   const porContrato = agrupar(pagos, (p) => p.contrato_id);
+  const visitaDelDia = new Map();
+  for (const v of visitas) {
+    if (v.fecha !== fecha) continue;
+    const previa = visitaDelDia.get(v.contrato_id);
+    if (!previa || v.id > previa.id) visitaDelDia.set(v.contrato_id, v);
+  }
   const filas = [];
 
   for (const k of contratos) {
@@ -215,10 +222,12 @@ export function calcularPlanilla(contratos, pagos, fecha, ruta = '') {
     const aCobrar = fecha >= hoy ? pendienteCuota + e.valorAtrasos : 0;
     const pagadoDia = lista.filter((p) => p.fecha === fecha).reduce((s, p) => s + p.abono + (p.int_mora || 0), 0);
 
+    const visita = visitaDelDia.get(k.id) ?? null;
     let situacion;
     if (fecha < hoy) situacion = cuota.estado === 'pagada' ? 'pago' : 'no_pago';
-    else if (aCobrar > 0) situacion = e.estado === 'atrasado' ? 'atrasado' : 'pendiente';
-    else situacion = 'cubierto'; // ya pagó o va adelantado
+    else if (aCobrar <= 0) situacion = 'cubierto'; // ya pagó o va adelantado
+    else if (visita) situacion = 'visitado'; // el cobrador marcó que no pagó
+    else situacion = e.estado === 'atrasado' ? 'atrasado' : 'pendiente';
 
     filas.push({
       contrato_id: k.id,
@@ -237,10 +246,11 @@ export function calcularPlanilla(contratos, pagos, fecha, ruta = '') {
       pagado_dia: pagadoDia,
       saldo: e.saldo,
       situacion,
+      visita,
     });
   }
 
-  const orden = { atrasado: 0, pendiente: 1, no_pago: 2, cubierto: 3, pago: 4 };
+  const orden = { atrasado: 0, pendiente: 1, visitado: 2, no_pago: 3, cubierto: 4, pago: 5 };
   filas.sort((a, b) => orden[a.situacion] - orden[b.situacion]
     || (a.ruta ?? 1e9) - (b.ruta ?? 1e9)
     || a.cliente_nombre.localeCompare(b.cliente_nombre));
@@ -256,14 +266,35 @@ export function calcularPlanilla(contratos, pagos, fecha, ruta = '') {
       a_cobrar: suma('a_cobrar'),
       cuotas_dia: filas.reduce((s, f) => s + (f.cuota?.valor ?? 0), 0),
       recaudado: suma('pagado_dia'),
-      pendientes: filas.filter((f) => ['atrasado', 'pendiente', 'no_pago'].includes(f.situacion)).length,
+      pendientes: filas.filter((f) => ['atrasado', 'pendiente'].includes(f.situacion)).length,
+      no_pagaron: filas.filter((f) => ['visitado', 'no_pago'].includes(f.situacion)).length,
       cubiertos: filas.filter((f) => ['cubierto', 'pago'].includes(f.situacion)).length,
     },
   };
 }
 
-/** Contrato con su estado y la lista de pagos ordenada (más reciente primero). */
-export function armarContrato(k, pagos) {
-  const ordenados = [...pagos].sort((a, b) => (a.fecha === b.fecha ? b.id - a.id : a.fecha < b.fecha ? 1 : -1));
-  return { ...k, pagos: ordenados, estado: estadoContrato(k, ordenados) };
+// ---------- visitas sin pago ----------
+export const MOTIVOS_NO_PAGO = ['No estaba', 'No tenía plata', 'Pidió volver otro día', 'No quiso pagar', 'Otro'];
+
+export function leerVisita(body, contrato) {
+  const v = {
+    fecha: body.fecha,
+    motivo: texto(body.motivo),
+    observacion: texto(body.observacion) || null,
+  };
+  const errores = {};
+  if (!esFecha(v.fecha)) errores.fecha = 'Fecha no válida.';
+  else if (v.fecha < contrato.fecha_inicio) errores.fecha = 'No puede ser antes del inicio del contrato.';
+  if (!v.motivo) errores.motivo = 'Escoja el motivo.';
+  else if (v.motivo.length > 60) errores.motivo = 'Motivo muy largo.';
+  if (contrato.estado?.estado === 'pagado') errores.motivo = 'Este contrato ya está pagado.';
+  return { v, errores };
+}
+
+const masReciente = (a, b) => (a.fecha === b.fecha ? b.id - a.id : a.fecha < b.fecha ? 1 : -1);
+
+/** Contrato con su estado, pagos y visitas sin pago (más recientes primero). */
+export function armarContrato(k, pagos, visitas = []) {
+  const ordenados = [...pagos].sort(masReciente);
+  return { ...k, pagos: ordenados, visitas: [...visitas].sort(masReciente), estado: estadoContrato(k, ordenados) };
 }

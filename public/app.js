@@ -525,6 +525,15 @@ function pintarContrato(k) {
       </li>`).join('')
     : '<p class="sub vacio-chico">Aún no hay pagos registrados.</p>';
 
+  const visitasValidas = (k.visitas ?? []).filter((v) => !v.anulado);
+  const visitas = visitasValidas.map((v) => `
+      <li class="pago pago-visita">
+        <div class="pago-info">
+          <div class="pago-valor">${icono('x')} No pagó · ${esc(v.motivo)}</div>
+          <div class="sub">${fechaCorta(v.fecha)} · ${esc(capital(v.creado_por_nombre ?? ''))}${v.observacion ? ` · ${esc(v.observacion)}` : ''}</div>
+        </div>
+      </li>`).join('');
+
   $('#det-contenido').innerHTML = `
     <div class="contrato-cabeza">
       <button class="btn-icono" type="button" id="k-volver" aria-label="Volver al cliente">${icono('back')}</button>
@@ -595,6 +604,12 @@ function pintarContrato(k) {
       <div class="seccion-cabeza"><h3>Pagos</h3><span class="sub">${k.pagos.filter((p) => !p.anulado).length}</span></div>
       <ul class="pagos">${pagos}</ul>
     </section>
+
+    ${visitasValidas.length ? `
+      <section class="seccion">
+        <div class="seccion-cabeza"><h3>Visitas sin pago</h3><span class="sub">${visitasValidas.length}</span></div>
+        <ul class="pagos">${visitas}</ul>
+      </section>` : ''}
 
     <div class="ficha-meta">
       Creado ${esc(k.creado)}${k.creado_por_nombre ? ` por ${esc(capital(k.creado_por_nombre))}` : ''}
@@ -1072,9 +1087,13 @@ function filaPlanilla(f) {
   } else if (f.situacion === 'pendiente') {
     etiqueta = `<span class="etiqueta etiqueta-aviso">${f.cuota?.pagado ? `Abonó ${pesos(f.cuota.pagado)}` : 'Cuota del día'}</span>`;
     monto = `<span class="monto">${pesos(f.a_cobrar)}</span>`;
+  } else if (f.situacion === 'visitado') {
+    etiqueta = `<span class="etiqueta etiqueta-peligro">${icono('x')} No pagó · ${esc(f.visita.motivo)}</span>`;
+    monto = `<span class="monto tenue">${pesos(f.a_cobrar)}</span>`;
   } else if (f.situacion === 'no_pago') {
     const dias = diasEntre(f.cuota.fecha, hoyLocal());
-    etiqueta = `<span class="etiqueta etiqueta-peligro">${f.cuota.pagado ? `Abonó ${pesos(f.cuota.pagado)}` : 'No pagó'}${f.dias_atraso ? ` · ${dias} ${dias === 1 ? 'día' : 'días'}` : ''}</span>`;
+    const motivo = f.visita ? ` · ${esc(f.visita.motivo)}` : '';
+    etiqueta = `<span class="etiqueta etiqueta-peligro">${f.cuota.pagado ? `Abonó ${pesos(f.cuota.pagado)}` : 'No pagó'}${motivo}${f.dias_atraso ? ` · ${dias} ${dias === 1 ? 'día' : 'días'}` : ''}</span>`;
     monto = `<span class="monto tenue">${pesos(f.cuota.valor - f.cuota.pagado)}</span>`;
   } else {
     const adelantada = f.situacion === 'cubierto' && !f.pagado_dia;
@@ -1087,6 +1106,17 @@ function filaPlanilla(f) {
     f.ruta != null ? `Ruta ${f.ruta}` : null,
   ].filter(Boolean).join(' · ');
   const puedeCobrar = !pasado && f.situacion !== 'cubierto';
+  const esHoy = planilla?.fecha === hoyLocal();
+  const nota = f.visita?.observacion ? `<span class="cliente-sub nota-visita"><span>“${esc(f.visita.observacion)}”${f.visita.creado_por_nombre ? ` — ${esc(capital(f.visita.creado_por_nombre))}` : ''}</span></span>` : '';
+  let segundo = '';
+  if (esHoy && (f.situacion === 'atrasado' || f.situacion === 'pendiente')) {
+    segundo = `<button class="btn-no-pago" type="button" data-no-pago="${f.contrato_id}">${icono('x')} No pagó</button>`;
+  } else if (f.situacion === 'visitado') {
+    segundo = `<button class="btn-no-pago" type="button" data-deshacer="${f.visita.id}">Deshacer</button>`;
+  }
+  const acciones = puedeCobrar || segundo
+    ? `<div class="acciones-fila">${puedeCobrar ? `<button class="btn-cobrar" type="button" data-cobrar="${f.contrato_id}">${icono('cash')} Cobrar</button>` : ''}${segundo}</div>`
+    : '';
 
   return `
     <li class="fila-planilla">
@@ -1097,10 +1127,11 @@ function filaPlanilla(f) {
           <span class="fila-etiqueta">${etiqueta}</span>
           <span class="cliente-sub"><span>${esc(detalle)}</span></span>
           <span class="cliente-sub"><span style="text-transform:capitalize">${esc(bonito(f.direccion ?? ''))}</span></span>
+          ${nota}
         </span>
         <span class="cliente-der">${monto}</span>
       </button>
-      ${puedeCobrar ? `<button class="btn-cobrar" type="button" data-cobrar="${f.contrato_id}">${icono('cash')} Cobrar</button>` : ''}
+      ${acciones}
     </li>`;
 }
 
@@ -1108,7 +1139,8 @@ function pintarPlanilla() {
   if (!planilla) return;
   const { filas, resumen, fecha, hoy } = planilla;
   const grupos = {
-    pendientes: filas.filter((f) => ['atrasado', 'pendiente', 'no_pago'].includes(f.situacion)),
+    pendientes: filas.filter((f) => ['atrasado', 'pendiente'].includes(f.situacion)),
+    no_pagaron: filas.filter((f) => ['visitado', 'no_pago'].includes(f.situacion)),
     cubiertos: filas.filter((f) => ['cubierto', 'pago'].includes(f.situacion)),
     todos: filas,
   };
@@ -1139,16 +1171,29 @@ function pintarPlanilla() {
   if (!visibles.length) {
     $('#planilla-vacio-titulo').textContent = filas.length ? 'Nada en esta lista' : 'Sin cobros este día';
     $('#planilla-vacio-texto').textContent = filas.length
-      ? (vistaPlanilla === 'pendientes' ? 'Todos los de este día ya están cubiertos.' : 'Todavía nadie ha pagado este día.')
+      ? ({
+        pendientes: 'No queda nadie por visitar este día.',
+        no_pagaron: 'Nadie ha quedado sin pagar este día.',
+        cubiertos: 'Todavía nadie ha pagado este día.',
+      }[vistaPlanilla])
       : `No hay cuotas para el ${fechaLarga(fecha)}${filtroRuta ? ' en esta ruta' : ''}.`;
   }
 }
 
 $('#planilla-lista').addEventListener('click', async (e) => {
   const cobrar = e.target.closest('[data-cobrar]');
+  const noPago = e.target.closest('[data-no-pago]');
+  const deshacer = e.target.closest('[data-deshacer]');
   const abrir = e.target.closest('[data-contrato]');
   try {
-    if (cobrar) {
+    if (noPago) {
+      const fila = planilla.filas.find((f) => f.contrato_id === Number(noPago.dataset.noPago));
+      abrirNoPago(fila);
+    } else if (deshacer) {
+      await api('POST', `/api/visitas/${deshacer.dataset.deshacer}/anular`);
+      await cargarPlanilla();
+      aviso('Se quitó el "no pagó"');
+    } else if (cobrar) {
       const k = await api('GET', `/api/contratos/${cobrar.dataset.cobrar}`);
       contratoAbierto = k;
       pintarContrato(k); // deja lista la ficha del contrato para cuando se guarde el pago
@@ -1164,6 +1209,55 @@ $('#planilla-lista').addEventListener('click', async (e) => {
 $('.pestanas').addEventListener('click', (e) => {
   const b = e.target.closest('[data-pagina]');
   if (b) irA(b.dataset.pagina);
+});
+
+// ---------- "No pagó" ----------
+const MOTIVOS = ['No estaba', 'No tenía plata', 'Pidió volver otro día', 'No quiso pagar', 'Otro'];
+const formV = $('#form-visita');
+let filaNoPago = null;
+
+function abrirNoPago(f) {
+  filaNoPago = f;
+  formV.reset();
+  limpiarErroresDe(formV);
+  formV.elements.fecha.value = planilla.fecha;
+  $('#visita-contrato').textContent = `Contrato ${idCorto(f.contrato_id)} · ${capital(f.cliente_nombre)}`;
+  $('#visita-resumen').innerHTML = tablaResumen([
+    ['Debía cobrar', pesos(f.a_cobrar), 'fuerte'],
+    ['Atraso actual', f.dias_atraso ? textoAtraso(f.dias_atraso) : 'Al día', f.dias_atraso ? 'peligro' : ''],
+  ]);
+  $('#visita-motivos').innerHTML = MOTIVOS.map((m) => `
+    <label><input type="radio" name="motivo" value="${esc(m)}"><span>${esc(m)}</span></label>`).join('');
+  $('#dlg-visita').showModal();
+}
+
+formV.addEventListener('change', () => limpiarErroresDe(formV));
+
+formV.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  limpiarErroresDe(formV);
+  const f = formV.elements;
+  const motivo = f.motivo.value;
+  if (motivo === 'Otro' && !f.observacion.value.trim()) {
+    mostrarErroresCampos(formV, { motivo: 'Escribe en la observación qué pasó.' });
+    f.observacion.focus();
+    return;
+  }
+  const btn = $('#btn-guardar-visita');
+  btn.disabled = true;
+  try {
+    await api('POST', `/api/contratos/${filaNoPago.contrato_id}/visitas`, {
+      fecha: f.fecha.value, motivo, observacion: f.observacion.value,
+    });
+    $('#dlg-visita').close();
+    await cargarPlanilla();
+    aviso(`${capital(filaNoPago.cliente_nombre)}: no pagó`);
+  } catch (ex) {
+    if (ex.campos) mostrarErroresCampos(formV, ex.campos);
+    else aviso(ex.message);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ================= totales =================

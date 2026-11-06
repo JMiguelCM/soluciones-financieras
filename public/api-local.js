@@ -3,17 +3,21 @@
 import { generarDemo } from './demo-datos.js';
 import {
   leerUsuario, leerCliente, leerContrato, leerPago, resumenPorCliente, calcularTotales,
-  armarContrato, calcularPlanilla, ahoraLocal, RESUMEN_VACIO, ERROR_CAMPOS,
+  armarContrato, calcularPlanilla, leerVisita, ahoraLocal, RESUMEN_VACIO, ERROR_CAMPOS,
 } from './logica.js';
 import { hoyLocal } from './calculos.js';
 
-const CLAVE = 'sf.demo.datos.v1';
+const CLAVE = 'sf.demo.datos.v2';
 let datos = cargar();
 
 function cargar() {
   try {
     const guardado = localStorage.getItem(CLAVE);
-    if (guardado) return JSON.parse(guardado);
+    if (guardado) {
+      const d = JSON.parse(guardado);
+      d.visitas ??= []; // datos guardados antes de existir las visitas
+      return d;
+    }
   } catch { /* sin almacenamiento o datos dañados: se generan de nuevo */ }
   const nuevos = generarDemo();
   guardar(nuevos);
@@ -50,10 +54,10 @@ function contratoCompleto(id) {
   const k = datos.contratos.find((x) => x.id === id);
   if (!k) return null;
   const cliente = datos.clientes.find((c) => c.id === k.cliente_id);
-  const pagos = datos.pagos.filter((p) => p.contrato_id === id).map((p) => ({
-    ...p, creado_por_nombre: nombreDe(p.creado_por), anulado_por_nombre: nombreDe(p.anulado_por),
-  }));
-  return armarContrato({ ...k, cliente_nombre: cliente?.nombre, creado_por_nombre: nombreDe(k.creado_por) }, pagos);
+  const conNombres = (x) => ({ ...x, creado_por_nombre: nombreDe(x.creado_por), anulado_por_nombre: nombreDe(x.anulado_por) });
+  const pagos = datos.pagos.filter((p) => p.contrato_id === id).map(conNombres);
+  const visitas = datos.visitas.filter((v) => v.contrato_id === id).map(conNombres);
+  return armarContrato({ ...k, cliente_nombre: cliente?.nombre, creado_por_nombre: nombreDe(k.creado_por) }, pagos, visitas);
 }
 
 // ---------- rutas ----------
@@ -133,7 +137,33 @@ function enrutar(metodo, recurso, id, sub, b, query, usuarioId) {
       const c = datos.clientes.find((x) => x.id === k.cliente_id) ?? {};
       return { ...k, cliente_nombre: c.nombre, ruta: c.ruta ?? null, telefono: c.telefono, direccion: c.direccion };
     });
-    return calcularPlanilla(contratos, pagosValidos(), fecha, query.get('ruta') ?? '');
+    const visitas = datos.visitas.filter((v) => !v.anulado && v.fecha === fecha)
+      .map((v) => ({ ...v, creado_por_nombre: nombreDe(v.creado_por) }));
+    return calcularPlanilla(contratos, pagosValidos(), fecha, query.get('ruta') ?? '', visitas);
+  }
+
+  // visitas sin pago ("No pagó")
+  if (recurso === 'contratos' && id && sub === 'visitas' && metodo === 'POST') {
+    const usuario = exigirUsuario(usuarioId);
+    const k = contratoCompleto(id);
+    if (!k) throw falla(404, 'Contrato no encontrado.');
+    const { v, errores } = leerVisita(b, k);
+    if (hayErrores(errores)) throw errorCampos(errores);
+    datos.visitas.push({
+      id: siguienteId(datos.visitas), contrato_id: id, ...v, creado_por: usuario.id, creado: ahoraLocal(),
+      anulado: 0, anulado_por: null, anulado_en: null,
+    });
+    guardar();
+    return contratoCompleto(id);
+  }
+  if (recurso === 'visitas' && id && sub === 'anular' && metodo === 'POST') {
+    const usuario = exigirUsuario(usuarioId);
+    const v = datos.visitas.find((x) => x.id === id);
+    if (!v) throw falla(404, 'Visita no encontrada.');
+    if (v.anulado) throw falla(409, 'Esa visita ya estaba anulada.');
+    Object.assign(v, { anulado: 1, anulado_por: usuario.id, anulado_en: ahoraLocal() });
+    guardar();
+    return contratoCompleto(v.contrato_id);
   }
 
   // contratos

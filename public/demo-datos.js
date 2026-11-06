@@ -60,6 +60,8 @@ export function generarDemo(hoy = hoyLocal(), semillaInicial = 20261104) {
   // ---------- contratos y pagos ----------
   const contratos = [];
   const pagos = [];
+  const visitas = [];
+  const MOTIVOS = [['No estaba', 3], ['No tenía plata', 4], ['Pidió volver otro día', 3], ['No quiso pagar', 1]];
 
   function crearContrato(clienteId, perfil) {
     const forma = ponderado([['D', 4], ['S', 4], ['Q', 3], ['M', 1]]);
@@ -110,6 +112,12 @@ export function generarDemo(hoy = hoyLocal(), semillaInicial = 20261104) {
       });
     };
 
+    // Visita en la que el cliente no pagó
+    const noPago = (fecha) => visitas.push({
+      id: visitas.length + 1, contrato_id: id, fecha, motivo: ponderado(MOTIVOS), observacion: null,
+      creado_por: uno(idsUsuarios), creado: `${fecha} ${hora()}`, anulado: 0, anulado_por: null, anulado_en: null,
+    });
+
     if (perfil === 'pagado') {
       fechas.forEach((f) => pagar(sumarDias(f, entre(0, 1)), vc));
     } else if (perfil === 'puntual') {
@@ -124,8 +132,10 @@ export function generarDemo(hoy = hoyLocal(), semillaInicial = 20261104) {
         const tarde = entre(0, 6);
         pagar(sumarDias(f, tarde), vc, tarde > 3 ? uno([5000, 10000, 15000]) : 0, tarde > 3 ? 'Pagó tarde, se cobró mora' : null);
       });
+      vencidas.slice(vencidas.length - deja).forEach((f) => { if (azar() < 0.7) noPago(f); });
     } else if (perfil === 'moroso') {
       vencidas.slice(0, Math.min(1, vencidas.length)).forEach((f) => pagar(f, vc));
+      vencidas.slice(1).forEach((f) => { if (azar() < 0.5) noPago(f); });
     }
   }
 
@@ -149,5 +159,5 @@ export function generarDemo(hoy = hoyLocal(), semillaInicial = 20261104) {
     });
   }
 
-  return { usuarios, clientes, contratos, pagos };
+  return { usuarios, clientes, contratos, pagos, visitas };
 }

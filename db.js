@@ -67,4 +67,19 @@ db.exec(`
     anulado_en   TEXT
   );
   CREATE INDEX IF NOT EXISTS ix_pagos_contrato ON pagos(contrato_id);
+
+  -- Visitas de cobro en las que el cliente no pagó
+  CREATE TABLE IF NOT EXISTS visitas (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    contrato_id  INTEGER NOT NULL REFERENCES contratos(id),
+    fecha        TEXT NOT NULL,
+    motivo       TEXT NOT NULL,
+    observacion  TEXT,
+    creado_por   INTEGER REFERENCES usuarios(id),
+    creado       TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    anulado      INTEGER NOT NULL DEFAULT 0,
+    anulado_por  INTEGER REFERENCES usuarios(id),
+    anulado_en   TEXT
+  );
+  CREATE INDEX IF NOT EXISTS ix_visitas_contrato ON visitas(contrato_id);
 `);

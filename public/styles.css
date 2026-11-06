@@ -273,9 +273,38 @@ input:focus, textarea:focus {
 .planilla .cliente-der { padding-top: 2px; }
 .planilla .monto { font-size: 1rem; }
 .fila-etiqueta { display: flex; margin: 4px 0 2px; }
+.acciones-fila { display: flex; gap: 8px; margin: -4px 16px 12px; }
+.btn-no-pago {
+  display: flex; align-items: center; justify-content: center; gap: 6px; flex: 0 0 auto; min-width: 38%;
+  padding: 9px 12px; cursor: pointer; border-radius: var(--radio-sm);
+  border: 1px solid color-mix(in srgb, var(--peligro) 40%, transparent);
+  background: var(--peligro-suave); color: var(--peligro); font-weight: 700; font-size: .9rem;
+}
+.btn-no-pago .ic { width: 16px; height: 16px; }
+.btn-no-pago:hover { border-color: var(--peligro); }
+.nota-visita span { font-style: italic; }
+.etiqueta .ic { width: 12px; height: 12px; }
+
+.btn-peligro { background: var(--peligro); color: #fff; }
+.btn-peligro:hover { filter: brightness(1.08); }
+@media (prefers-color-scheme: dark) { .btn-peligro { color: #1a0a04; } }
+
+.motivos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.motivos label { position: relative; cursor: pointer; margin: 0; }
+.motivos input { position: absolute; opacity: 0; width: 1px; height: 1px; min-height: 0; }
+.motivos span {
+  display: block; padding: 12px 10px; text-align: center; border-radius: var(--radio-sm);
+  border: 1px solid var(--borde-fuerte); background: var(--superficie); font-weight: 600; font-size: .9rem; color: var(--texto-2);
+}
+.motivos input:checked + span { border-color: var(--peligro); background: var(--peligro-suave); color: var(--peligro); }
+.motivos input:focus-visible + span { outline: 3px solid color-mix(in srgb, var(--peligro) 40%, transparent); }
+
+.pago-visita .pago-valor { color: var(--peligro); display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.pago-visita .ic { width: 15px; height: 15px; }
+
 .btn-cobrar {
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: calc(100% - 32px); margin: -4px 16px 12px; padding: 9px; cursor: pointer;
+  flex: 1; padding: 9px; cursor: pointer;
   border-radius: var(--radio-sm); border: 1px solid color-mix(in srgb, var(--primario) 35%, transparent);
   background: var(--primario-suave); color: var(--primario); font-weight: 700; font-size: .9rem;
 }

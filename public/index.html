@@ -113,6 +113,7 @@
 
       <div class="filtros" id="planilla-filtros" role="tablist" aria-label="Filtrar planilla">
         <button type="button" role="tab" data-vista="pendientes">Por cobrar <span></span></button>
+        <button type="button" role="tab" data-vista="no_pagaron">No pagaron <span></span></button>
         <button type="button" role="tab" data-vista="cubiertos">Cobrados <span></span></button>
         <button type="button" role="tab" data-vista="todos">Todos <span></span></button>
       </div>
@@ -422,6 +423,41 @@
         <button class="btn btn-secundario" type="button" data-cerrar>Cancelar</button>
         <button class="btn btn-primario" type="submit" id="btn-guardar-pago">
           <svg class="ic"><use href="#i-check"/></svg> Guardar pago
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===================== NO PAGÓ ===================== -->
+  <dialog id="dlg-visita" class="hoja hoja-form">
+    <form id="form-visita" autocomplete="off" novalidate>
+      <div class="hoja-cabeza">
+        <div>
+          <h2>No pagó</h2>
+          <p class="sub" id="visita-contrato"></p>
+        </div>
+        <button class="btn-icono" type="button" data-cerrar aria-label="Cerrar">
+          <svg class="ic"><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <div class="hoja-cuerpo">
+        <div class="tabla-resumen" id="visita-resumen"></div>
+        <div class="campo">
+          <label>¿Por qué no pagó?</label>
+          <div class="motivos" id="visita-motivos" role="radiogroup" aria-label="Motivo"></div>
+          <p class="error-campo" data-error="motivo"></p>
+        </div>
+        <div class="campo">
+          <label for="v-obs">Observación <span class="opc">opcional</span></label>
+          <input id="v-obs" name="observacion" placeholder="Ej: dijo que paga el lunes">
+        </div>
+        <input type="hidden" name="fecha">
+        <p class="error-campo" data-error="fecha"></p>
+      </div>
+      <div class="hoja-pie">
+        <button class="btn btn-secundario" type="button" data-cerrar>Cancelar</button>
+        <button class="btn btn-peligro" type="submit" id="btn-guardar-visita">
+          <svg class="ic"><use href="#i-x"/></svg> Registrar no pagó
         </button>
       </div>
     </form>
