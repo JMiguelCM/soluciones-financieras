@@ -344,7 +344,7 @@ function pintarLista() {
   const montoDe = (c) => (filtro === 'hoy' ? c.por_cobrar_hoy : filtro === 'atrasados' ? c.valor_atrasos : c.saldo);
 
   $('#lista-clientes').innerHTML = visibles.map((c) => `
-    <li><button class="cliente ${c.cuota_hoy > 0 ? 'cobra-hoy' : ''}" type="button" data-id="${c.id}" ${c.contrato ? `data-contrato-fila="${c.contrato.id}"` : ''}>
+    <li><button class="cliente ${c.por_cobrar_hoy > 0 ? 'cobra-hoy' : ''}" type="button" data-id="${c.id}" ${c.contrato ? `data-contrato-fila="${c.contrato.id}"` : ''}>
       ${avatar(c.nombre)}
       <span class="cliente-info">
         <span class="cliente-nombre" style="display:block;text-transform:capitalize">${resaltar(c.nombre, q)}</span>
@@ -1395,7 +1395,7 @@ function filaPlanilla(f) {
   const acciones = botones.length ? `<div class="acciones-fila acciones-${botones.length}">${botones.join('')}</div>` : '';
 
   return `
-    <li class="fila-planilla ${esHoy && f.cuota && f.cuota.estado !== 'pagada' ? 'cobra-hoy' : ''}">
+    <li class="fila-planilla ${esHoy && (f.situacion === 'atrasado' || f.situacion === 'pendiente') ? 'cobra-hoy' : ''}">
       <button class="cliente" type="button" data-contrato="${f.contrato_id}">
         ${avatar(f.cliente_nombre)}
         <span class="cliente-info">
