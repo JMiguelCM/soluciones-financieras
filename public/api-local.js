@@ -3,11 +3,11 @@
 import { generarDemo } from './demo-datos.js';
 import {
   leerUsuario, leerCliente, leerContrato, leerPago, resumenPorCliente, calcularTotales,
-  armarContrato, calcularPlanilla, leerVisita, ahoraLocal, RESUMEN_VACIO, ERROR_CAMPOS,
+  armarContrato, calcularPlanilla, leerVisita, leerMora, leerRefinanciacion, ahoraLocal, RESUMEN_VACIO, ERROR_CAMPOS,
 } from './logica.js';
 import { hoyLocal } from './calculos.js';
 
-const CLAVE = 'sf.demo.datos.v2';
+const CLAVE = 'sf.demo.datos.v3';
 let datos = cargar();
 
 function cargar() {
@@ -16,6 +16,7 @@ function cargar() {
     if (guardado) {
       const d = JSON.parse(guardado);
       d.visitas ??= []; // datos guardados antes de existir las visitas
+      d.moras ??= [];
       return d;
     }
   } catch { /* sin almacenamiento o datos dañados: se generan de nuevo */ }
@@ -57,7 +58,8 @@ function contratoCompleto(id) {
   const conNombres = (x) => ({ ...x, creado_por_nombre: nombreDe(x.creado_por), anulado_por_nombre: nombreDe(x.anulado_por) });
   const pagos = datos.pagos.filter((p) => p.contrato_id === id).map(conNombres);
   const visitas = datos.visitas.filter((v) => v.contrato_id === id).map(conNombres);
-  return armarContrato({ ...k, cliente_nombre: cliente?.nombre, creado_por_nombre: nombreDe(k.creado_por) }, pagos, visitas);
+  const moras = datos.moras.filter((m) => m.contrato_id === id).map(conNombres);
+  return armarContrato({ ...k, cliente_nombre: cliente?.nombre, creado_por_nombre: nombreDe(k.creado_por) }, pagos, visitas, moras);
 }
 
 // ---------- rutas ----------
@@ -127,7 +129,7 @@ function enrutar(metodo, recurso, id, sub, b, query, usuarioId) {
   // totales
   if (recurso === 'totales' && metodo === 'GET') {
     const contratos = datos.contratos.map((k) => ({ ...k, ruta: datos.clientes.find((c) => c.id === k.cliente_id)?.ruta ?? null }));
-    return calcularTotales(contratos, pagosValidos(), query.get('ruta') ?? '');
+    return calcularTotales(contratos, pagosValidos(), query.get('ruta') ?? '', datos.moras.filter((m) => !m.anulado));
   }
 
   // planilla del día
@@ -140,6 +142,46 @@ function enrutar(metodo, recurso, id, sub, b, query, usuarioId) {
     const visitas = datos.visitas.filter((v) => !v.anulado && v.fecha === fecha)
       .map((v) => ({ ...v, creado_por_nombre: nombreDe(v.creado_por) }));
     return calcularPlanilla(contratos, pagosValidos(), fecha, query.get('ruta') ?? '', visitas);
+  }
+
+  // intereses de mora
+  if (recurso === 'contratos' && id && sub === 'moras' && metodo === 'POST') {
+    const usuario = exigirUsuario(usuarioId);
+    const k = contratoCompleto(id);
+    if (!k) throw falla(404, 'Contrato no encontrado.');
+    const { m, errores } = leerMora(b, k);
+    if (hayErrores(errores)) throw errorCampos(errores);
+    datos.moras.push({
+      id: siguienteId(datos.moras), contrato_id: id, ...m, creado_por: usuario.id, creado: ahoraLocal(),
+      anulado: 0, anulado_por: null, anulado_en: null,
+    });
+    guardar();
+    return contratoCompleto(id);
+  }
+  if (recurso === 'moras' && id && sub === 'anular' && metodo === 'POST') {
+    const usuario = exigirUsuario(usuarioId);
+    const m = datos.moras.find((x) => x.id === id);
+    if (!m) throw falla(404, 'Cargo de mora no encontrado.');
+    if (m.anulado) throw falla(409, 'Ese cargo ya estaba anulado.');
+    Object.assign(m, { anulado: 1, anulado_por: usuario.id, anulado_en: ahoraLocal() });
+    guardar();
+    return contratoCompleto(m.contrato_id);
+  }
+
+  // refinanciar
+  if (recurso === 'contratos' && id && sub === 'refinanciar' && metodo === 'POST') {
+    const usuario = exigirUsuario(usuarioId);
+    const viejo = contratoCompleto(id);
+    if (!viejo) throw falla(404, 'Contrato no encontrado.');
+    const { k, errores, traslado } = leerRefinanciacion(b, viejo);
+    if (hayErrores(errores)) throw errorCampos(errores);
+    const nuevo = { id: siguienteId(datos.contratos), ...k, creado_por: usuario.id, creado: ahoraLocal() };
+    datos.contratos.push(nuevo);
+    Object.assign(datos.contratos.find((x) => x.id === id), {
+      refinanciado_por_id: nuevo.id, saldo_trasladado: traslado.saldo, mora_trasladada: traslado.mora || null,
+    });
+    guardar();
+    return contratoCompleto(nuevo.id);
   }
 
   // visitas sin pago ("No pagó")

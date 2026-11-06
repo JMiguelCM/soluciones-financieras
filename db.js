@@ -82,4 +82,35 @@ db.exec(`
     anulado_en   TEXT
   );
   CREATE INDEX IF NOT EXISTS ix_visitas_contrato ON visitas(contrato_id);
+
+  -- Cargos de interés de mora aplicados a un contrato (se abonan con pagos.int_mora)
+  CREATE TABLE IF NOT EXISTS moras (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    contrato_id  INTEGER NOT NULL REFERENCES contratos(id),
+    fecha        TEXT NOT NULL,
+    valor        INTEGER NOT NULL,
+    observacion  TEXT,
+    creado_por   INTEGER REFERENCES usuarios(id),
+    creado       TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    anulado      INTEGER NOT NULL DEFAULT 0,
+    anulado_por  INTEGER REFERENCES usuarios(id),
+    anulado_en   TEXT
+  );
+  CREATE INDEX IF NOT EXISTS ix_moras_contrato ON moras(contrato_id);
 `);
+
+// Columnas agregadas después de la primera versión (bases ya creadas no las tienen)
+function agregarColumnas(tabla, columnas) {
+  const existentes = new Set(db.prepare(`PRAGMA table_info(${tabla})`).all().map((c) => c.name));
+  for (const [nombre, tipo] of Object.entries(columnas)) {
+    if (!existentes.has(nombre)) db.exec(`ALTER TABLE ${tabla} ADD COLUMN ${nombre} ${tipo}`);
+  }
+}
+
+agregarColumnas('contratos', {
+  refinancia_id: 'INTEGER REFERENCES contratos(id)',        // contrato nuevo → el que refinanció
+  refinanciado_por_id: 'INTEGER REFERENCES contratos(id)',  // contrato viejo → el que lo reemplazó
+  saldo_trasladado: 'INTEGER',                              // saldo del crédito que pasó al nuevo
+  mora_trasladada: 'INTEGER',                               // mora pendiente que pasó al nuevo
+  adicional: 'INTEGER',                                     // dinero nuevo entregado al refinanciar
+});

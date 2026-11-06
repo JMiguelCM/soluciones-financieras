@@ -696,3 +696,51 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; }
+
+/* ============ Filtros detrás del botón ☰ ============ */
+.btn-menu {
+  position: relative; flex: none; display: grid; place-items: center;
+  width: 50px; height: 50px; border-radius: var(--radio); cursor: pointer;
+  background: var(--superficie); border: 1px solid var(--borde); color: var(--texto); box-shadow: var(--sombra-1);
+}
+.btn-menu .ic { width: 22px; height: 22px; }
+.btn-menu[aria-expanded="true"] { background: var(--texto); border-color: var(--texto); color: var(--fondo); }
+.punto-filtro { position: absolute; top: 9px; right: 9px; width: 9px; height: 9px; border-radius: 50%; background: var(--acento); border: 2px solid var(--superficie); }
+.titulo-pagina .btn-menu { align-self: flex-end; }
+#pagina-planilla .titulo-pagina { align-items: center; }
+#pagina-planilla .titulo-pagina > div:first-child { flex: 1; min-width: 0; }
+.filtros:not([hidden]) { animation: aparecer .15s ease-out; }
+
+/* La planilla ya no tiene botón Cobrar: "No pagó" queda a la derecha */
+.acciones-fila { justify-content: flex-end; }
+.acciones-fila .btn-no-pago { min-width: 0; padding: 8px 16px; }
+
+/* ============ Contrato: refinanciación e intereses de mora ============ */
+.acciones-contrato { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+.acciones-contrato .btn-ancho:only-child { grid-column: 1 / -1; }
+.acciones-contrato .btn-secundario .ic { color: var(--primario); }
+.saldo-mora { font-size: .88rem; font-weight: 600; color: var(--peligro); }
+
+.enlace-refi {
+  display: flex; align-items: center; gap: 12px; width: calc(100% - 44px); margin: 0 22px 12px; padding: 12px 14px;
+  text-align: left; cursor: pointer; border-radius: var(--radio);
+  background: var(--aviso-suave); border: 1px solid var(--borde); color: var(--texto);
+}
+.enlace-refi > span { flex: 1; display: grid; gap: 2px; }
+.enlace-refi .sub { font-size: .82rem; }
+.enlace-refi > .ic:first-child { color: var(--aviso-c); }
+
+.mora-cajas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.mora-caja { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--radio-sm); background: var(--superficie-2); border: 1px solid var(--borde); }
+.mora-caja span { font-size: .72rem; font-weight: 700; color: var(--tenue); text-transform: uppercase; letter-spacing: .04em; }
+.mora-caja strong { font-variant-numeric: tabular-nums; }
+.mora-caja.tono-peligro { background: var(--peligro-suave); border-color: transparent; }
+.mora-caja.tono-peligro strong { color: var(--peligro); }
+#p-mora-rapido button, #m-rapidos button { text-transform: none; }
+.campo input[readonly] { background: var(--superficie-2); color: var(--texto); font-weight: 700; }
+@media (max-width: 640px) {
+  .barra-busqueda .selector-ruta select { max-width: 116px; padding-left: 38px; padding-right: 10px; }
+  .barra-busqueda { gap: 6px; }
+}
+/* Safari: lo que va después del título flotante de un fieldset debe bajar debajo de él */
+fieldset > .tabla-resumen, fieldset > .segmentos, fieldset > .fila-2 { clear: both; }

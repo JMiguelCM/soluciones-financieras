@@ -145,7 +145,7 @@ export function estadoContrato(contrato, pagos, hoy = hoyLocal()) {
   if (saldo <= 0) estado = 'pagado';
   else if (cuotasAtraso > 0) estado = 'atrasado';
 
-  return {
+  const resultado = {
     estado,
     fechaUltimaCuota: fechas[fechas.length - 1],
     cuotasPagas,
@@ -165,4 +165,24 @@ export function estadoContrato(contrato, pagos, hoy = hoyLocal()) {
     proximaCuota: plan.find((c) => c.estado !== 'pagada') ?? null,
     plan,
   };
+
+  // Refinanciado: el saldo pasó a otro contrato; este queda cerrado, sin atrasos ni cuotas por cobrar.
+  if (contrato.refinanciado_por_id) {
+    Object.assign(resultado, {
+      estado: 'refinanciado',
+      saldo: 0,
+      saldoTrasladado: contrato.saldo_trasladado ?? saldo,
+      cuotasAtraso: 0,
+      diasAtraso: 0,
+      valorAtrasos: 0,
+      valorAdelantos: 0,
+      cuotasAdelantadas: 0,
+      proximaCuota: null,
+      plan: plan.map((c) => (c.estado === 'pagada' ? c : { ...c, estado: 'refinanciada' })),
+    });
+  }
+  return resultado;
 }
+
+/** Contrato que ya no se cobra: pagado por completo o refinanciado en otro. */
+export const estaCerrado = (estado) => estado === 'pagado' || estado === 'refinanciado';

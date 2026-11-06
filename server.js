@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
 import {
   mayus, leerUsuario, leerCliente, leerContrato, leerPago, resumenPorCliente, calcularTotales,
-  armarContrato, calcularPlanilla, leerVisita, RESUMEN_VACIO, ERROR_CAMPOS,
+  armarContrato, calcularPlanilla, leerVisita, leerMora, leerRefinanciacion, RESUMEN_VACIO, ERROR_CAMPOS,
 } from './public/logica.js';
 import { hoyLocal } from './public/calculos.js';
 
@@ -102,7 +102,8 @@ app.put('/api/clientes/:id', (req, res) => {
 // ---------- totales ----------
 app.get('/api/totales', (req, res) => {
   const contratos = db.prepare('SELECT k.*, c.ruta FROM contratos k JOIN clientes c ON c.id = k.cliente_id').all();
-  res.json(calcularTotales(contratos, pagosValidos(), String(req.query.ruta ?? '')));
+  const moras = db.prepare('SELECT * FROM moras WHERE anulado = 0').all();
+  res.json(calcularTotales(contratos, pagosValidos(), String(req.query.ruta ?? ''), moras));
 });
 
 // ---------- planilla del día ----------
@@ -132,7 +133,11 @@ function contratoCompleto(id) {
     SELECT v.*, u.nombre AS creado_por_nombre, ua.nombre AS anulado_por_nombre
     FROM visitas v LEFT JOIN usuarios u ON u.id = v.creado_por LEFT JOIN usuarios ua ON ua.id = v.anulado_por
     WHERE v.contrato_id = ?`).all(id);
-  return armarContrato(k, pagos, visitas);
+  const moras = db.prepare(`
+    SELECT m.*, u.nombre AS creado_por_nombre, ua.nombre AS anulado_por_nombre
+    FROM moras m LEFT JOIN usuarios u ON u.id = m.creado_por LEFT JOIN usuarios ua ON ua.id = m.anulado_por
+    WHERE m.contrato_id = ?`).all(id);
+  return armarContrato(k, pagos, visitas, moras);
 }
 
 app.get('/api/clientes/:id/contratos', (req, res) => {
@@ -217,6 +222,60 @@ app.post('/api/visitas/:id/anular', (req, res) => {
   db.prepare(`UPDATE visitas SET anulado = 1, anulado_por = ?, anulado_en = datetime('now', 'localtime') WHERE id = ?`)
     .run(usuario.id, v.id);
   res.json(contratoCompleto(v.contrato_id));
+});
+
+// ---------- intereses de mora ----------
+app.post('/api/contratos/:id/moras', (req, res) => {
+  const usuario = usuarioActual(req);
+  if (!usuario) return res.status(401).json({ error: 'Ingrese con un usuario.' });
+  const k = contratoCompleto(Number(req.params.id));
+  if (!k) return res.status(404).json({ error: 'Contrato no encontrado.' });
+  const { m, errores } = leerMora(req.body ?? {}, k);
+  if (hayErrores(errores)) return responderErrores(res, errores);
+  db.prepare('INSERT INTO moras (contrato_id, fecha, valor, observacion, creado_por) VALUES (?, ?, ?, ?, ?)')
+    .run(k.id, m.fecha, m.valor, m.observacion, usuario.id);
+  res.status(201).json(contratoCompleto(k.id));
+});
+
+app.post('/api/moras/:id/anular', (req, res) => {
+  const usuario = usuarioActual(req);
+  if (!usuario) return res.status(401).json({ error: 'Ingrese con un usuario.' });
+  const m = db.prepare('SELECT * FROM moras WHERE id = ?').get(Number(req.params.id));
+  if (!m) return res.status(404).json({ error: 'Cargo de mora no encontrado.' });
+  if (m.anulado) return res.status(409).json({ error: 'Ese cargo ya estaba anulado.' });
+  db.prepare(`UPDATE moras SET anulado = 1, anulado_por = ?, anulado_en = datetime('now', 'localtime') WHERE id = ?`)
+    .run(usuario.id, m.id);
+  res.json(contratoCompleto(m.contrato_id));
+});
+
+// ---------- refinanciar ----------
+app.post('/api/contratos/:id/refinanciar', (req, res) => {
+  const usuario = usuarioActual(req);
+  if (!usuario) return res.status(401).json({ error: 'Ingrese con un usuario.' });
+  const viejo = contratoCompleto(Number(req.params.id));
+  if (!viejo) return res.status(404).json({ error: 'Contrato no encontrado.' });
+
+  const { k, errores, traslado } = leerRefinanciacion(req.body ?? {}, viejo);
+  if (hayErrores(errores)) return responderErrores(res, errores);
+
+  db.exec('BEGIN');
+  try {
+    const r = db.prepare(`
+      INSERT INTO contratos (cliente_id, fecha_inicio, fecha_primera_cuota, forma_pago, prestamo, interes,
+        num_cuotas, valor_cuota, credito, observaciones, creado_por, refinancia_id, adicional)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      k.cliente_id, k.fecha_inicio, k.fecha_primera_cuota, k.forma_pago, k.prestamo, k.interes,
+      k.num_cuotas, k.valor_cuota, k.credito, k.observaciones, usuario.id, k.refinancia_id, k.adicional,
+    );
+    const nuevoId = Number(r.lastInsertRowid);
+    db.prepare('UPDATE contratos SET refinanciado_por_id = ?, saldo_trasladado = ?, mora_trasladada = ? WHERE id = ?')
+      .run(nuevoId, traslado.saldo, traslado.mora || null, viejo.id);
+    db.exec('COMMIT');
+    res.status(201).json(contratoCompleto(nuevoId));
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
 });
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Ruta no encontrada.' }));

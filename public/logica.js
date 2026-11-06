@@ -1,5 +1,5 @@
 // Reglas de negocio compartidas por el servidor (SQLite) y el modo demo del navegador.
-import { estadoContrato, FORMAS_PAGO, hoyLocal } from './calculos.js';
+import { estadoContrato, estaCerrado, FORMAS_PAGO, hoyLocal } from './calculos.js';
 
 // ---------- utilidades ----------
 // Map.groupBy no existe en navegadores de celular algo viejos
@@ -112,7 +112,8 @@ export function leerPago(body, contrato) {
   if (!esFecha(p.fecha)) errores.fecha = 'Fecha no válida.';
   else if (p.fecha < contrato.fecha_inicio) errores.fecha = 'No puede ser antes del inicio del contrato.';
   if (p.abono <= 0 && p.int_mora <= 0) errores.abono = 'Escriba el valor del abono.';
-  if (p.abono > contrato.estado.saldo) errores.abono = `El saldo es $${contrato.estado.saldo.toLocaleString('es-CO')}; el abono no puede ser mayor.`;
+  if (contrato.estado.estado === 'refinanciado') errores.abono = 'Este contrato fue refinanciado: registre el pago en el contrato nuevo.';
+  else if (p.abono > contrato.estado.saldo) errores.abono = `El saldo es $${contrato.estado.saldo.toLocaleString('es-CO')}; el abono no puede ser mayor.`;
   return { p, errores };
 }
 
@@ -128,7 +129,7 @@ export function resumenPorCliente(contratos, pagos) {
   for (const k of contratos) {
     const e = estadoContrato(k, pagosPorContrato.get(k.id) ?? []);
     const r = resumen.get(k.cliente_id) ?? { ...RESUMEN_VACIO };
-    if (e.estado !== 'pagado') {
+    if (!estaCerrado(e.estado)) {
       r.contratos_activos += 1;
       r.saldo += e.saldo;
       // lo que vence hoy y aún no se ha pagado
@@ -151,8 +152,9 @@ const TOTALES_VACIO = () => ({
   atrasos_dia: 0, atrasos: 0, saldo_creditos: 0, saldo_mora: 0, total_saldos: 0,
 });
 
-/** `contratos` con la ruta del cliente en `ruta`; `pagos` solo los no anulados. */
-export function calcularTotales(contratos, pagos, ruta = '') {
+/** `contratos` con la ruta del cliente en `ruta`; `pagos` y `moras` solo los no anulados. */
+export function calcularTotales(contratos, pagos, ruta = '', moras = []) {
+  const morasPorContrato = agrupar(moras, (m) => m.contrato_id);
   const hoy = hoyLocal();
   const porContrato = agrupar(pagos, (p) => p.contrato_id);
   const nuevos = TOTALES_VACIO();
@@ -162,7 +164,8 @@ export function calcularTotales(contratos, pagos, ruta = '') {
   for (const k of contratos) {
     if (ruta && (ruta === 'sin' ? k.ruta != null : String(k.ruta) !== ruta)) continue;
     const e = estadoContrato(k, porContrato.get(k.id) ?? []);
-    if (e.estado === 'pagado') continue;
+    if (estaCerrado(e.estado)) continue;
+    const mora = resumenMora(k, porContrato.get(k.id) ?? [], morasPorContrato.get(k.id) ?? []);
 
     const deHoy = e.plan.filter((c) => c.estado === 'hoy');
     const fila = {
@@ -174,8 +177,8 @@ export function calcularTotales(contratos, pagos, ruta = '') {
       atrasos_dia: e.valorAtrasos,
       atrasos: e.valorAtrasos + deHoy.reduce((s, c) => s + (c.valor - c.pagado), 0),
       saldo_creditos: e.saldo,
-      saldo_mora: 0, // la mora se cobra a mano en cada pago; no queda saldo pendiente
-      total_saldos: e.saldo,
+      saldo_mora: mora.saldo,
+      total_saldos: e.saldo + mora.saldo,
     };
     const claveRuta = k.ruta == null ? 'sin' : String(k.ruta);
     if (!porRuta.has(claveRuta)) porRuta.set(claveRuta, { ruta: k.ruta, ...TOTALES_VACIO() });
@@ -214,6 +217,7 @@ export function calcularPlanilla(contratos, pagos, fecha, ruta = '', visitas = [
     if (ruta && (ruta === 'sin' ? k.ruta != null : String(k.ruta) !== ruta)) continue;
     const lista = porContrato.get(k.id) ?? [];
     const e = estadoContrato(k, lista);
+    if (e.estado === 'refinanciado') continue; // se cobra en el contrato nuevo
     const cuota = e.plan.find((c) => c.fecha === fecha) ?? null;
     const atrasadoVigente = fecha >= hoy && e.estado === 'atrasado';
     if (!cuota && !atrasadoVigente) continue;
@@ -287,14 +291,71 @@ export function leerVisita(body, contrato) {
   else if (v.fecha < contrato.fecha_inicio) errores.fecha = 'No puede ser antes del inicio del contrato.';
   if (!v.motivo) errores.motivo = 'Escoja el motivo.';
   else if (v.motivo.length > 60) errores.motivo = 'Motivo muy largo.';
-  if (contrato.estado?.estado === 'pagado') errores.motivo = 'Este contrato ya está pagado.';
+  if (estaCerrado(contrato.estado?.estado)) errores.motivo = contrato.estado.estado === 'pagado' ? 'Este contrato ya está pagado.' : 'Este contrato fue refinanciado.';
   return { v, errores };
 }
 
 const masReciente = (a, b) => (a.fecha === b.fecha ? b.id - a.id : a.fecha < b.fecha ? 1 : -1);
 
-/** Contrato con su estado, pagos y visitas sin pago (más recientes primero). */
-export function armarContrato(k, pagos, visitas = []) {
+// ---------- intereses de mora ----------
+/**
+ * Saldo de interés de mora: lo cargado (moras) menos lo abonado en los pagos (int_mora)
+ * y lo que se trasladó al refinanciar. Si se cobró mora sin haberla cargado, el saldo queda en 0.
+ */
+export function resumenMora(k, pagos, moras) {
+  const cargado = moras.filter((m) => !m.anulado).reduce((s, m) => s + m.valor, 0);
+  const pagado = pagos.filter((p) => !p.anulado).reduce((s, p) => s + (p.int_mora || 0), 0);
+  const trasladado = k.mora_trasladada || 0;
+  return { cargado, pagado, trasladado, saldo: Math.max(0, cargado - pagado - trasladado) };
+}
+
+export function leerMora(body, contrato) {
+  const m = { fecha: body.fecha, valor: entero(body.valor), observacion: texto(body.observacion) || null };
+  const errores = {};
+  if (!esFecha(m.fecha)) errores.fecha = 'Fecha no válida.';
+  else if (m.fecha < contrato.fecha_inicio) errores.fecha = 'No puede ser antes del inicio del contrato.';
+  if (m.valor <= 0) errores.valor = 'Escriba el valor del interés de mora.';
+  else if (m.valor > contrato.credito) errores.valor = 'El interés de mora no puede superar el valor del crédito.';
+  if (contrato.estado?.estado === 'refinanciado') errores.valor = 'Este contrato fue refinanciado.';
+  return { m, errores };
+}
+
+// ---------- refinanciación ----------
+/**
+ * Datos del contrato nuevo que reemplaza a `viejo` (contrato completo, con estado y mora).
+ * Capital nuevo = saldo del crédito (ya descuenta abonos y picos) + mora pendiente si se incluye + dinero adicional.
+ */
+export function leerRefinanciacion(body, viejo) {
+  const errores = {};
+  if (estaCerrado(viejo.estado.estado)) {
+    errores.forma_pago = viejo.estado.estado === 'pagado' ? 'Este contrato ya está pagado.' : 'Este contrato ya fue refinanciado.';
+    return { k: null, errores, traslado: null };
+  }
+  const saldo = viejo.estado.saldo;
+  const mora = body.incluir_mora ? viejo.mora.saldo : 0;
+  const adicional = entero(body.adicional);
+  const prestamo = saldo + mora + adicional;
+  const { k, errores: e2 } = leerContrato({ ...body, cliente_id: viejo.cliente_id, prestamo }, () => true);
+  Object.assign(errores, e2);
+  if (errores.prestamo) errores.adicional = errores.prestamo;
+  if (k) {
+    k.refinancia_id = viejo.id;
+    k.adicional = adicional || null;
+  }
+  return { k, errores, traslado: { saldo, mora } };
+}
+
+/** Contrato con su estado, pagos, visitas sin pago y cargos de mora (más recientes primero). */
+export function armarContrato(k, pagos, visitas = [], moras = []) {
   const ordenados = [...pagos].sort(masReciente);
-  return { ...k, pagos: ordenados, visitas: [...visitas].sort(masReciente), estado: estadoContrato(k, ordenados) };
+  const estado = estadoContrato(k, ordenados);
+  const mora = resumenMora(k, ordenados, moras);
+  return {
+    ...k,
+    pagos: ordenados,
+    visitas: [...visitas].sort(masReciente),
+    moras: [...moras].sort(masReciente),
+    mora,
+    estado: { ...estado, saldoMora: mora.saldo, totalSaldo: estado.saldo + mora.saldo },
+  };
 }

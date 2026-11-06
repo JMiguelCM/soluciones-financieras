@@ -36,6 +36,8 @@
       <symbol id="i-cash" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></symbol>
       <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
       <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
     </defs>
   </svg>
@@ -102,6 +104,9 @@
           <svg class="ic"><use href="#i-route"/></svg>
           <select id="planilla-ruta" aria-label="Filtrar planilla por ruta"></select>
         </label>
+        <button class="btn-menu" type="button" id="btn-filtros-planilla" aria-expanded="false" aria-controls="planilla-filtros" aria-label="Mostrar filtros" title="Mostrar filtros">
+          <svg class="ic"><use href="#i-menu"/></svg><i class="punto-filtro" hidden></i>
+        </button>
       </div>
 
       <div class="semana">
@@ -116,7 +121,7 @@
 
       <div id="planilla-resumen"></div>
 
-      <div class="filtros" id="planilla-filtros" role="tablist" aria-label="Filtrar planilla">
+      <div class="filtros" id="planilla-filtros" hidden role="tablist" aria-label="Filtrar planilla">
         <button type="button" role="tab" data-vista="pendientes">Por cobrar <span></span></button>
         <button type="button" role="tab" data-vista="no_pagaron">No pagaron <span></span></button>
         <button type="button" role="tab" data-vista="cubiertos">Cobrados <span></span></button>
@@ -159,7 +164,7 @@
       <div class="barra-busqueda">
         <div class="buscador">
           <svg class="ic"><use href="#i-search"/></svg>
-          <input id="buscar" type="search" placeholder="Buscar nombre, teléfono o dirección" autocomplete="off" aria-label="Buscar clientes">
+          <input id="buscar" type="search" placeholder="Buscar cliente" autocomplete="off" aria-label="Buscar clientes">
         </div>
         <label class="selector-ruta">
           <svg class="ic"><use href="#i-route"/></svg>
@@ -167,9 +172,12 @@
             <option value="">Todas</option>
           </select>
         </label>
+        <button class="btn-menu" type="button" id="btn-filtros" aria-expanded="false" aria-controls="filtros" aria-label="Mostrar filtros" title="Mostrar filtros">
+          <svg class="ic"><use href="#i-menu"/></svg><i class="punto-filtro" hidden></i>
+        </button>
       </div>
 
-      <div class="filtros" id="filtros" role="tablist" aria-label="Filtrar clientes">
+      <div class="filtros" id="filtros" hidden role="tablist" aria-label="Filtrar clientes">
         <button type="button" role="tab" data-filtro="todos">Todos <span></span></button>
         <button type="button" role="tab" data-filtro="hoy">Cobrar hoy <span></span></button>
         <button type="button" role="tab" data-filtro="atrasados">Atrasados <span></span></button>
@@ -298,7 +306,7 @@
     <form id="form-contrato" autocomplete="off" novalidate>
       <div class="hoja-cabeza">
         <div>
-          <h2>Nuevo contrato</h2>
+          <h2 id="contrato-titulo">Nuevo contrato</h2>
           <p class="sub" id="contrato-cliente"></p>
         </div>
         <button class="btn-icono" type="button" data-cerrar aria-label="Cerrar">
@@ -307,6 +315,21 @@
       </div>
 
       <div class="hoja-cuerpo">
+        <fieldset id="k-refi" hidden>
+          <legend>Refinanciación</legend>
+          <div class="tabla-resumen" id="k-refi-resumen"></div>
+          <label class="interruptor" id="k-refi-mora-fila">
+            <input type="checkbox" id="k-incluir-mora">
+            <span class="interruptor-pista"></span>
+            <span id="k-refi-mora-texto">Sumar el interés de mora pendiente</span>
+          </label>
+          <div class="campo">
+            <label for="k-adicional">Dinero adicional que se le entrega <span class="opc">opcional</span></label>
+            <div class="dinero"><span>$</span><input id="k-adicional" name="adicional" inputmode="numeric" placeholder="0"></div>
+            <p class="error-campo" data-error="adicional"></p>
+          </div>
+        </fieldset>
+
         <fieldset>
           <legend>Forma de pago</legend>
           <div class="segmentos" role="radiogroup" aria-label="Forma de pago">
@@ -407,7 +430,8 @@
           <div class="campo">
             <label for="p-mora">Interés de mora <span class="opc">opcional</span></label>
             <div class="dinero"><span>$</span><input id="p-mora" name="int_mora" inputmode="numeric" placeholder="0"></div>
-            <p class="ayuda">Lo que cobras de mora en esta visita. Va aparte: no baja el saldo.</p>
+            <div class="sugerencias" id="p-mora-rapido"></div>
+            <p class="ayuda" id="p-mora-ayuda">Abona al saldo de interés de mora. No baja el saldo del crédito.</p>
           </div>
           <div class="campo">
             <label for="p-fecha">Fecha</label>
@@ -428,6 +452,48 @@
         <button class="btn btn-secundario" type="button" data-cerrar>Cancelar</button>
         <button class="btn btn-primario" type="submit" id="btn-guardar-pago">
           <svg class="ic"><use href="#i-check"/></svg> Guardar pago
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===================== INTERÉS DE MORA ===================== -->
+  <dialog id="dlg-mora" class="hoja hoja-form">
+    <form id="form-mora" autocomplete="off" novalidate>
+      <div class="hoja-cabeza">
+        <div>
+          <h2>Aplicar interés de mora</h2>
+          <p class="sub" id="mora-contrato"></p>
+        </div>
+        <button class="btn-icono" type="button" data-cerrar aria-label="Cerrar">
+          <svg class="ic"><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <div class="hoja-cuerpo">
+        <div class="tabla-resumen" id="mora-resumen"></div>
+        <div class="campo">
+          <label for="m-valor">Valor del interés de mora</label>
+          <div class="dinero dinero-grande"><span>$</span><input id="m-valor" name="valor" inputmode="numeric" placeholder="0"></div>
+          <div class="sugerencias" id="m-rapidos"></div>
+          <p class="error-campo" data-error="valor"></p>
+        </div>
+        <div class="fila-2">
+          <div class="campo">
+            <label for="m-fecha">Fecha</label>
+            <input id="m-fecha" name="fecha" type="date">
+            <p class="error-campo" data-error="fecha"></p>
+          </div>
+          <div class="campo">
+            <label for="m-obs">Observación <span class="opc">opcional</span></label>
+            <input id="m-obs" name="observacion" placeholder="Ej: 2 cuotas atrasadas">
+          </div>
+        </div>
+        <p class="ayuda">Queda como saldo de interés de mora del contrato. Se abona desde "Registrar pago", en el campo Interés de mora.</p>
+      </div>
+      <div class="hoja-pie">
+        <button class="btn btn-secundario" type="button" data-cerrar>Cancelar</button>
+        <button class="btn btn-peligro" type="submit" id="btn-guardar-mora">
+          <svg class="ic"><use href="#i-check"/></svg> Aplicar mora
         </button>
       </div>
     </form>

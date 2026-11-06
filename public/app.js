@@ -1,5 +1,5 @@
 import {
-  FORMAS_PAGO, cronograma, cuotaSugerida, primeraCuotaSugerida, estadoContrato, hoyLocal, sumarDias, diasEntre,
+  FORMAS_PAGO, cronograma, cuotaSugerida, primeraCuotaSugerida, estadoContrato, estaCerrado, hoyLocal, sumarDias, diasEntre,
 } from './calculos.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -111,6 +111,7 @@ const ESTADOS = {
   al_dia: { texto: 'Al día', clase: 'ok' },
   atrasado: { texto: 'Atrasado', clase: 'peligro' },
   pagado: { texto: 'Pagado', clase: 'gris' },
+  refinanciado: { texto: 'Refinanciado', clase: 'gris' },
 };
 
 // En GitHub Pages no hay servidor: la app usa una API simulada dentro del navegador.
@@ -451,7 +452,9 @@ function tarjetaContrato(k) {
     ? `${e.cuotasAtraso} ${e.cuotasAtraso === 1 ? 'cuota' : 'cuotas'} atrasada${e.cuotasAtraso === 1 ? '' : 's'} · ${e.diasAtraso} días`
     : e.estado === 'pagado'
       ? `Terminó de pagar ${fechaCorta(e.fechaUltimoAbono)}`
-      : `Próxima cuota ${fechaCorta(e.proximaCuota?.fecha, false)}`;
+      : e.estado === 'refinanciado'
+        ? `Refinanciado en el contrato ${idCorto(k.refinanciado_por_id)} · saldo trasladado ${pesos(e.saldoTrasladado)}`
+        : `Próxima cuota ${fechaCorta(e.proximaCuota?.fecha, false)}`;
   return `
     <button class="contrato" type="button" data-contrato="${k.id}">
       <div class="contrato-fila">
@@ -502,7 +505,7 @@ function pintarContrato(k) {
   const plan = e.plan.map((c) => {
     const etiquetas = {
       pagada: ['Pagada', 'ok'], vencida: ['Vencida', 'peligro'], hoy: ['Hoy', 'aviso'],
-      parcial: ['Abonada', 'aviso'], pendiente: ['Pendiente', 'gris'],
+      parcial: ['Abonada', 'aviso'], pendiente: ['Pendiente', 'gris'], refinanciada: ['Refinanciada', 'gris'],
     };
     const [txt, cls] = etiquetas[c.estado];
     const abono = c.pagado > 0 && c.pagado < c.valor ? ` <span class="sub">(abonó ${pesos(c.pagado)})</span>` : '';
@@ -534,6 +537,19 @@ function pintarContrato(k) {
         </div>
       </li>`).join('');
 
+  const mora = k.mora ?? { cargado: 0, pagado: 0, trasladado: 0, saldo: 0 };
+  const cerrado = estaCerrado(e.estado);
+  const puedePagar = e.estado !== 'refinanciado' && (!cerrado || mora.saldo > 0);
+  const cargosMora = (k.moras ?? []).map((m) => `
+      <li class="pago ${m.anulado ? 'pago-anulado' : ''}">
+        <div class="pago-info">
+          <div class="pago-valor">${pesos(m.valor)}</div>
+          <div class="sub">${fechaCorta(m.fecha)} · ${esc(capital(m.creado_por_nombre ?? ''))}${m.observacion ? ` · ${esc(m.observacion)}` : ''}</div>
+          ${m.anulado ? `<div class="sub">Anulado por ${esc(capital(m.anulado_por_nombre ?? ''))} el ${esc(m.anulado_en)}</div>` : ''}
+        </div>
+        ${m.anulado ? '<span class="etiqueta etiqueta-gris">Anulado</span>' : `<button class="btn-chico btn-chico-peligro" type="button" data-anular-mora="${m.id}">Anular</button>`}
+      </li>`).join('');
+
   $('#det-contenido').innerHTML = `
     <div class="contrato-cabeza">
       <button class="btn-icono" type="button" id="k-volver" aria-label="Volver al cliente">${icono('back')}</button>
@@ -543,12 +559,28 @@ function pintarContrato(k) {
       </div>
     </div>
 
+    ${k.refinanciado_por_id ? `
+      <button class="enlace-refi" type="button" data-contrato="${k.refinanciado_por_id}">
+        ${icono('refresh')}
+        <span><strong>Refinanciado en el contrato ${idCorto(k.refinanciado_por_id)}</strong>
+        <span class="sub">Se trasladó un saldo de ${pesos(e.saldoTrasladado)}${k.mora_trasladada ? ` y ${pesos(k.mora_trasladada)} de mora` : ''}. Ver contrato nuevo</span></span>
+        ${icono('chevron')}
+      </button>` : ''}
+    ${k.refinancia_id ? `
+      <button class="enlace-refi" type="button" data-contrato="${k.refinancia_id}">
+        ${icono('refresh')}
+        <span><strong>Refinancia el contrato ${idCorto(k.refinancia_id)}</strong>
+        <span class="sub">Capital ${pesos(k.prestamo)}${k.adicional ? ` (incluye ${pesos(k.adicional)} de dinero nuevo)` : ''}. Ver contrato anterior</span></span>
+        ${icono('chevron')}
+      </button>` : ''}
+
     <div class="saldo-grande">
       <div class="contrato-fila">
         <span class="sub">Saldo</span>
         <span class="etiqueta etiqueta-${est.clase}">${est.texto}</span>
       </div>
       <div class="saldo-valor">${pesos(e.saldo)}</div>
+      ${mora.saldo ? `<div class="saldo-mora">+ ${pesos(mora.saldo)} de interés de mora · total ${pesos(e.saldo + mora.saldo)}</div>` : ''}
       <div class="barra-avance ${est.clase}"><span style="width:${avance}%"></span></div>
       <div class="sub">${e.cuotasPagas} de ${k.num_cuotas} cuotas pagas · crédito ${pesos(k.credito)}</div>
     </div>
@@ -559,9 +591,10 @@ function pintarContrato(k) {
         <div>Debe ponerse al día con ${pesos(e.valorAtrasos)}</div></div>
       </div>` : ''}
 
-    ${e.estado !== 'pagado' ? `
-      <div class="ficha-acciones">
-        <button class="btn btn-primario btn-ancho" type="button" id="k-pagar">${icono('cash')} Registrar pago</button>
+    ${puedePagar || !cerrado ? `
+      <div class="ficha-acciones acciones-contrato">
+        ${puedePagar ? `<button class="btn btn-primario btn-ancho" type="button" id="k-pagar">${icono('cash')} Registrar pago</button>` : ''}
+        ${!cerrado ? `<button class="btn btn-secundario btn-ancho" type="button" id="k-refinanciar">${icono('refresh')} Refinanciar</button>` : ''}
       </div>` : ''}
 
     <section class="seccion">
@@ -589,8 +622,24 @@ function pintarContrato(k) {
         ${filaInfo('Abonos int. mora', pesos(e.abonoMora))}
         ${filaInfo('Total abonos', pesos(e.totalAbonos))}
         ${filaInfo('Saldo crédito', pesos(e.saldo), 'fuerte')}
+        ${filaInfo('Saldo int. mora', pesos(mora.saldo), mora.saldo ? 'peligro' : '')}
+        ${filaInfo('Total saldo', pesos(e.saldo + mora.saldo), 'fuerte')}
       </dl>
       ${k.observaciones ? `<p class="nota">${esc(k.observaciones)}</p>` : ''}
+    </section>
+
+    <section class="seccion">
+      <div class="seccion-cabeza">
+        <h3>Intereses de mora</h3>
+        ${e.estado !== 'refinanciado' ? `<button class="btn-chico" type="button" id="k-mora">${icono('plus')} Aplicar mora</button>` : ''}
+      </div>
+      <div class="mora-cajas">
+        <div class="mora-caja ${mora.saldo ? 'tono-peligro' : ''}"><span>Saldo int. mora</span><strong>${pesos(mora.saldo)}</strong></div>
+        <div class="mora-caja"><span>Aplicado</span><strong>${pesos(mora.cargado)}</strong></div>
+        <div class="mora-caja"><span>Abonado</span><strong>${pesos(mora.pagado)}</strong></div>
+        ${mora.trasladado ? `<div class="mora-caja"><span>Pasó al refinanciar</span><strong>${pesos(mora.trasladado)}</strong></div>` : ''}
+      </div>
+      ${cargosMora ? `<ul class="pagos">${cargosMora}</ul>` : '<p class="sub vacio-chico">No se le ha aplicado interés de mora.</p>'}
     </section>
 
     <section class="seccion">
@@ -621,12 +670,27 @@ function pintarContrato(k) {
     if (c) pintarFicha(c);
   });
   $('#k-pagar')?.addEventListener('click', () => abrirPago(contratoAbierto));
+  $('#k-refinanciar')?.addEventListener('click', () => abrirRefinanciar(contratoAbierto));
+  $('#k-mora')?.addEventListener('click', () => abrirMora(contratoAbierto));
 }
 
 $('#det-contenido').addEventListener('click', async (e) => {
   const tarjeta = e.target.closest('[data-contrato]');
   if (tarjeta) {
     abrirContrato(Number(tarjeta.dataset.contrato)).catch((ex) => aviso(ex.message));
+    return;
+  }
+  const anularMora = e.target.closest('[data-anular-mora]');
+  if (anularMora) {
+    const m = contratoAbierto.moras.find((x) => x.id === Number(anularMora.dataset.anularMora));
+    if (!confirm(`¿Anular el interés de mora de ${pesos(m.valor)} del ${fechaCorta(m.fecha)}?`)) return;
+    try {
+      const k = await api('POST', `/api/moras/${m.id}/anular`);
+      pintarContrato(k);
+      aviso('Interés de mora anulado');
+    } catch (ex) {
+      aviso(ex.message);
+    }
     return;
   }
   const anular = e.target.closest('[data-anular]');
@@ -651,23 +715,58 @@ let cuotaManual = false;
 let primeraManual = false;
 let clienteContrato = null;
 
-function abrirNuevoContrato(c) {
+let refinanciando = null; // contrato viejo cuando el formulario está en modo refinanciar
+
+function prepararFormContrato(c, viejo) {
   clienteContrato = c;
+  refinanciando = viejo;
   formK.reset();
   limpiarErroresDe(formK);
   cuotaManual = false;
   primeraManual = false;
   $('#contrato-cliente').textContent = capital(c.nombre);
+  $('#contrato-titulo').textContent = viejo ? `Refinanciar contrato ${idCorto(viejo.id)}` : 'Nuevo contrato';
+  $('#btn-guardar-contrato').lastChild.textContent = viejo ? ' Refinanciar' : ' Crear contrato';
+  $('#k-refi').hidden = !viejo;
+  formK.elements.prestamo.readOnly = Boolean(viejo);
+  formK.elements.prestamo.closest('.campo').querySelector('label').textContent = viejo ? 'Capital del nuevo contrato' : 'Valor prestado';
   formK.elements.fecha_inicio.value = hoyLocal();
   formK.elements.interes.value = 20;
+  if (viejo) {
+    formK.querySelector(`[name="forma_pago"][value="${viejo.forma_pago}"]`).checked = true;
+    const e = viejo.estado;
+    $('#k-refi-resumen').innerHTML = tablaResumen([
+      ['Crédito del contrato', pesos(viejo.credito)],
+      ['Abonado (cuotas y picos)', pesos(e.abonoCredito)],
+      ['Picos', pesos(e.picos)],
+      ['Saldo que se traslada', pesos(e.saldo), 'fuerte'],
+    ]);
+    $('#k-refi-mora-fila').hidden = !viejo.mora.saldo;
+    $('#k-refi-mora-texto').textContent = `Sumar el interés de mora pendiente (${pesos(viejo.mora.saldo)})`;
+  }
   recalcularContrato();
   $('#dlg-contrato').showModal();
   $('#dlg-contrato .hoja-cuerpo').scrollTop = 0;
 }
 
+function abrirNuevoContrato(c) {
+  prepararFormContrato(c, null);
+}
+
+function abrirRefinanciar(k) {
+  prepararFormContrato({ id: k.cliente_id, nombre: k.cliente_nombre }, k);
+}
+
+function capitalRefinanciado() {
+  if (!refinanciando) return 0;
+  const mora = $('#k-incluir-mora').checked ? refinanciando.mora.saldo : 0;
+  return refinanciando.estado.saldo + mora + leerPesos(formK.elements.adicional.value);
+}
+
 function recalcularContrato() {
   const f = formK.elements;
   const forma = f.forma_pago.value;
+  if (refinanciando) f.prestamo.value = formatoPesos(String(capitalRefinanciado()));
   const prestamo = leerPesos(f.prestamo.value);
   const n = Number(f.num_cuotas.value) || 0;
   const interes = Number(f.interes.value) || 0;
@@ -710,6 +809,8 @@ function recalcularContrato() {
 }
 
 campoDinero(formK.elements.prestamo, recalcularContrato);
+campoDinero(formK.elements.adicional, recalcularContrato);
+$('#k-incluir-mora').addEventListener('change', recalcularContrato);
 campoDinero(formK.elements.valor_cuota, () => { cuotaManual = formK.elements.valor_cuota.value !== ''; recalcularContrato(); });
 formK.elements.num_cuotas.addEventListener('input', recalcularContrato);
 formK.elements.interes.addEventListener('input', () => { cuotaManual = false; recalcularContrato(); });
@@ -730,7 +831,7 @@ formK.addEventListener('submit', async (e) => {
   const btn = $('#btn-guardar-contrato');
   btn.disabled = true;
   try {
-    const k = await api('POST', '/api/contratos', {
+    const datosContrato = {
       cliente_id: clienteContrato.id,
       forma_pago: f.forma_pago.value,
       prestamo: leerPesos(f.prestamo.value),
@@ -739,12 +840,21 @@ formK.addEventListener('submit', async (e) => {
       fecha_inicio: f.fecha_inicio.value,
       fecha_primera_cuota: f.fecha_primera_cuota.value,
       observaciones: f.observaciones.value,
-    });
+    };
+    const viejo = refinanciando;
+    const k = viejo
+      ? await api('POST', `/api/contratos/${viejo.id}/refinanciar`, {
+        ...datosContrato,
+        adicional: leerPesos(f.adicional.value),
+        incluir_mora: $('#k-incluir-mora').checked,
+      })
+      : await api('POST', '/api/contratos', datosContrato);
     $('#dlg-contrato').close();
     await cargarClientes();
+    if (pagina === 'planilla') cargarPlanilla();
     pintarContrato(k);
     if (!$('#dlg-detalle').open) $('#dlg-detalle').showModal();
-    aviso(`Contrato ${idCorto(k.id)} creado`);
+    aviso(viejo ? `Contrato ${idCorto(viejo.id)} refinanciado en el ${idCorto(k.id)}` : `Contrato ${idCorto(k.id)} creado`);
   } catch (ex) {
     if (ex.campos) mostrarErroresCampos(formK, ex.campos);
     else aviso(ex.message);
@@ -771,7 +881,14 @@ function abrirPago(k) {
     ['Cuotas pagas', `${e.cuotasPagas} de ${k.num_cuotas}`],
     ['Picos', pesos(e.picos)],
     ['Saldo crédito', pesos(e.saldo), 'fuerte'],
+    ...(k.mora?.saldo ? [['Saldo int. mora', pesos(k.mora.saldo), 'peligro']] : []),
   ]);
+  $('#p-mora-rapido').innerHTML = k.mora?.saldo
+    ? `<button type="button" data-mora="${k.mora.saldo}">Abonar toda la mora · ${pesos(k.mora.saldo)}</button>`
+    : '';
+  $('#p-mora-ayuda').textContent = k.mora?.saldo
+    ? 'Abona al saldo de interés de mora. No baja el saldo del crédito.'
+    : 'No tiene mora aplicada; si cobras algo de mora, queda registrado aparte.';
 
   const rapidos = [];
   const faltaCuota = k.valor_cuota - e.picos;
@@ -781,7 +898,7 @@ function abrirPago(k) {
   const conHoy = Math.min(e.saldo, e.valorAtrasos + deHoy);
   if (e.valorAtrasos > 0 && deHoy > 0) rapidos.push([`Atrasos + hoy ${pesos(conHoy)}`, conHoy]);
   if (!rapidos.some(([, v]) => v === e.saldo)) rapidos.push([`Todo el saldo ${pesos(e.saldo)}`, e.saldo]);
-  $('#p-rapidos').innerHTML = rapidos.map(([t, v]) => `<button type="button" data-valor="${v}">${t}</button>`).join('');
+  $('#p-rapidos').innerHTML = rapidos.filter(([, v]) => v > 0).map(([t, v]) => `<button type="button" data-valor="${v}">${t}</button>`).join('');
 
   formP.elements.fecha.value = hoyLocal();
   previsualizarPago();
@@ -807,8 +924,16 @@ function previsualizarPago() {
     ['Atrasos', `C:${simulado.cuotasAtraso} D:${simulado.diasAtraso}`, simulado.cuotasAtraso ? 'peligro' : ''],
     ['Total recibido', pesos(abono + mora)],
     ['Saldo crédito', pasa ? 'El abono supera el saldo' : pesos(simulado.saldo), pasa ? 'peligro fuerte' : 'fuerte'],
+    ...(k.mora?.saldo ? [['Saldo int. mora', pesos(Math.max(0, k.mora.saldo - mora)), k.mora.saldo - mora > 0 ? 'peligro' : '']] : []),
   ]);
 }
+
+$('#p-mora-rapido').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-mora]');
+  if (!b) return;
+  formP.elements.int_mora.value = formatoPesos(b.dataset.mora);
+  previsualizarPago();
+});
 
 campoDinero(formP.elements.abono, previsualizarPago);
 campoDinero(formP.elements.int_mora, previsualizarPago);
@@ -848,6 +973,63 @@ formP.addEventListener('submit', async (e) => {
     aviso(k.estado.estado === 'pagado' ? '¡Contrato pagado por completo!' : `Pago de ${pesos(abono + mora)} registrado`);
   } catch (ex) {
     if (ex.campos) mostrarErroresCampos(formP, ex.campos);
+    else aviso(ex.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ================= interés de mora =================
+const formM = $('#form-mora');
+
+function abrirMora(k) {
+  formM.reset();
+  limpiarErroresDe(formM);
+  const e = k.estado;
+  $('#mora-contrato').textContent = `Contrato ${idCorto(k.id)} · ${capital(k.cliente_nombre)}`;
+  $('#mora-resumen').innerHTML = tablaResumen([
+    ['Atrasos', `C:${e.cuotasAtraso} D:${e.diasAtraso}`, e.cuotasAtraso ? 'peligro' : ''],
+    ['Valor atrasos', pesos(e.valorAtrasos)],
+    ['Saldo int. mora actual', pesos(k.mora.saldo), 'fuerte'],
+  ]);
+  // sugerencias: un porcentaje de lo atrasado o de la cuota, redondeado al mil
+  const base = e.valorAtrasos || k.valor_cuota;
+  const redondeo = (v) => Math.max(1000, Math.round(v / 1000) * 1000);
+  const sugerencias = [
+    [`5% ${e.valorAtrasos ? 'de los atrasos' : 'de la cuota'}`, redondeo(base * 0.05)],
+    [`10% ${e.valorAtrasos ? 'de los atrasos' : 'de la cuota'}`, redondeo(base * 0.1)],
+    ...(e.diasAtraso ? [[`${pesos(1000)} por día (${e.diasAtraso} días)`, 1000 * e.diasAtraso]] : []),
+  ];
+  $('#m-rapidos').innerHTML = sugerencias.map(([t, v]) => `<button type="button" data-valor="${v}">${t} · ${pesos(v)}</button>`).join('');
+  formM.elements.fecha.value = hoyLocal();
+  $('#dlg-mora').showModal();
+}
+
+campoDinero(formM.elements.valor);
+$('#m-rapidos').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-valor]');
+  if (!b) return;
+  formM.elements.valor.value = formatoPesos(b.dataset.valor);
+  limpiarErroresDe(formM);
+});
+formM.addEventListener('input', () => limpiarErroresDe(formM));
+
+formM.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  limpiarErroresDe(formM);
+  const f = formM.elements;
+  const btn = $('#btn-guardar-mora');
+  btn.disabled = true;
+  try {
+    const valor = leerPesos(f.valor.value);
+    const k = await api('POST', `/api/contratos/${contratoAbierto.id}/moras`, {
+      fecha: f.fecha.value, valor, observacion: f.observacion.value,
+    });
+    $('#dlg-mora').close();
+    pintarContrato(k);
+    aviso(`Interés de mora de ${pesos(valor)} aplicado`);
+  } catch (ex) {
+    if (ex.campos) mostrarErroresCampos(formM, ex.campos);
     else aviso(ex.message);
   } finally {
     btn.disabled = false;
@@ -1078,7 +1260,6 @@ async function cargarPlanilla() {
 const textoAtraso = (dias) => `Lleva ${dias} ${dias === 1 ? 'día' : 'días'} de atraso`;
 
 function filaPlanilla(f) {
-  const pasado = f.situacion === 'pago' || f.situacion === 'no_pago';
   let etiqueta;
   let monto;
   if (f.situacion === 'atrasado') {
@@ -1105,7 +1286,6 @@ function filaPlanilla(f) {
     f.cuota ? `cuota ${pesos(f.valor_cuota)}` : 'sin cuota hoy',
     f.ruta != null ? `Ruta ${f.ruta}` : null,
   ].filter(Boolean).join(' · ');
-  const puedeCobrar = !pasado && f.situacion !== 'cubierto';
   const esHoy = planilla?.fecha === hoyLocal();
   const nota = f.visita?.observacion ? `<span class="cliente-sub nota-visita"><span>“${esc(f.visita.observacion)}”${f.visita.creado_por_nombre ? ` — ${esc(capital(f.visita.creado_por_nombre))}` : ''}</span></span>` : '';
   let segundo = '';
@@ -1114,9 +1294,8 @@ function filaPlanilla(f) {
   } else if (f.situacion === 'visitado') {
     segundo = `<button class="btn-no-pago" type="button" data-deshacer="${f.visita.id}">Deshacer</button>`;
   }
-  const acciones = puedeCobrar || segundo
-    ? `<div class="acciones-fila">${puedeCobrar ? `<button class="btn-cobrar" type="button" data-cobrar="${f.contrato_id}">${icono('cash')} Cobrar</button>` : ''}${segundo}</div>`
-    : '';
+  // Para cobrar se toca la fila: abre el contrato con "Registrar pago".
+  const acciones = segundo ? `<div class="acciones-fila">${segundo}</div>` : '';
 
   return `
     <li class="fila-planilla">
@@ -1376,6 +1555,24 @@ if (MODO_DEMO) {
     location.reload();
   });
 }
+
+// ================= filtros detrás del botón ☰ =================
+function prepararMenu(botonId, panelId, esFiltroPorDefecto) {
+  const boton = $(`#${botonId}`);
+  const panel = $(`#${panelId}`);
+  boton.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    boton.setAttribute('aria-expanded', String(!panel.hidden));
+    boton.setAttribute('aria-label', panel.hidden ? 'Mostrar filtros' : 'Ocultar filtros');
+  });
+  // punto en el botón cuando hay un filtro distinto al normal y el panel está cerrado
+  const marcar = () => { boton.querySelector('.punto-filtro').hidden = esFiltroPorDefecto(); };
+  panel.addEventListener('click', () => setTimeout(marcar));
+  marcar();
+  return marcar;
+}
+prepararMenu('btn-filtros', 'filtros', () => filtro === 'todos');
+prepararMenu('btn-filtros-planilla', 'planilla-filtros', () => vistaPlanilla === 'pendientes');
 
 // ================= inicio =================
 (async function iniciar() {

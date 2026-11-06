@@ -29,8 +29,9 @@ insertar('clientes', datos.clientes);
 insertar('contratos', datos.contratos);
 insertar('pagos', datos.pagos);
 insertar('visitas', datos.visitas);
+insertar('moras', datos.moras);
 db.exec('COMMIT');
 
-console.log(`Demo: ${datos.usuarios.length} usuarios, ${datos.clientes.length} clientes, ${datos.contratos.length} contratos, ${datos.pagos.length} pagos, ${datos.visitas.length} visitas sin pago.`);
+console.log(`Demo: ${datos.usuarios.length} usuarios, ${datos.clientes.length} clientes, ${datos.contratos.length} contratos, ${datos.pagos.length} pagos, ${datos.visitas.length} visitas sin pago, ${datos.moras.length} cargos de mora.`);
 
 await import('./server.js');

@@ -61,6 +61,7 @@ export function generarDemo(hoy = hoyLocal(), semillaInicial = 20261104) {
   const contratos = [];
   const pagos = [];
   const visitas = [];
+  const moras = [];
   const MOTIVOS = [['No estaba', 3], ['No tenía plata', 4], ['Pidió volver otro día', 3], ['No quiso pagar', 1]];
 
   function crearContrato(clienteId, perfil) {
@@ -112,6 +113,12 @@ export function generarDemo(hoy = hoyLocal(), semillaInicial = 20261104) {
       });
     };
 
+    // Cargo de interés de mora
+    const cargarMora = (fecha, valor, obs) => moras.push({
+      id: moras.length + 1, contrato_id: id, fecha: fecha > hoy ? hoy : fecha, valor, observacion: obs,
+      creado_por: uno(idsUsuarios), creado: `${fecha > hoy ? hoy : fecha} ${hora()}`, anulado: 0, anulado_por: null, anulado_en: null,
+    });
+
     // Visita en la que el cliente no pagó
     const noPago = (fecha) => visitas.push({
       id: visitas.length + 1, contrato_id: id, fecha, motivo: ponderado(MOTIVOS), observacion: null,
@@ -130,9 +137,12 @@ export function generarDemo(hoy = hoyLocal(), semillaInicial = 20261104) {
       const deja = Math.min(vencidas.length, entre(1, 3));
       vencidas.slice(0, vencidas.length - deja).forEach((f) => {
         const tarde = entre(0, 6);
-        pagar(sumarDias(f, tarde), vc, tarde > 3 ? uno([5000, 10000, 15000]) : 0, tarde > 3 ? 'Pagó tarde, se cobró mora' : null);
+        const valorMora = tarde > 3 ? uno([5000, 10000, 15000]) : 0;
+        if (valorMora) cargarMora(sumarDias(f, tarde), valorMora, 'Pagó tarde');
+        pagar(sumarDias(f, tarde), vc, valorMora, valorMora ? 'Pagó tarde, abonó la mora' : null);
       });
       vencidas.slice(vencidas.length - deja).forEach((f) => { if (azar() < 0.7) noPago(f); });
+      if (deja && azar() < 0.5) cargarMora(sumarDias(vencidas[vencidas.length - 1], 1), Math.max(2000, Math.round((vc * 0.1) / 1000) * 1000), 'Mora por atraso');
     } else if (perfil === 'moroso') {
       vencidas.slice(0, Math.min(1, vencidas.length)).forEach((f) => pagar(f, vc));
       vencidas.slice(1).forEach((f) => { if (azar() < 0.5) noPago(f); });
@@ -159,5 +169,5 @@ export function generarDemo(hoy = hoyLocal(), semillaInicial = 20261104) {
     });
   }
 
-  return { usuarios, clientes, contratos, pagos, visitas };
+  return { usuarios, clientes, contratos, pagos, visitas, moras };
 }
