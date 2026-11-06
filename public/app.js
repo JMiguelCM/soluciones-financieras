@@ -1,0 +1,1101 @@
+import {
+  FORMAS_PAGO, cronograma, cuotaSugerida, primeraCuotaSugerida, estadoContrato, hoyLocal,
+} from './calculos.js';
+
+const $ = (sel) => document.querySelector(sel);
+const CLAVE_USUARIO = 'sf.usuario';
+const OCUPACIONES_BASE = ['INDEPENDIENTE', 'COMERCIANTE', 'EMPLEADO', 'SERVICIO AL CLIENTE', 'MOTORRATÓN', 'COSTURERA'];
+
+let usuario = null;
+let clientes = [];
+let clienteAbierto = null;
+let editandoId = null;
+
+// ================= utilidades =================
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+const icono = (id) => `<svg class="ic"><use href="#i-${id}"/></svg>`;
+
+// Quita tildes sin cambiar la longitud (para resaltar coincidencias por posición)
+const sinTildes = (s) => [...String(s ?? '').toLowerCase()].map((c) => c.normalize('NFD')[0]).join('');
+const soloDigitos = (s) => String(s ?? '').replace(/\D/g, '');
+
+function iniciales(nombre) {
+  const partes = String(nombre ?? '').trim().split(/\s+/).filter((p) => !/^(DE|DEL|LA|LOS|LAS|Y)$/i.test(p));
+  return ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase() || '?';
+}
+
+function tono(texto) {
+  let h = 0;
+  for (const c of String(texto)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return h % 360;
+}
+
+function avatar(nombre, clase = '') {
+  return `<span class="avatar ${clase}" style="--h:${tono(nombre)}">${esc(iniciales(nombre))}</span>`;
+}
+
+function formatoTel(t) {
+  const d = soloDigitos(t);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)} ${d.slice(3)}`;
+  if (d.length === 7) return `${d.slice(0, 3)} ${d.slice(3)}`;
+  return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6, 10)}`;
+}
+
+const idCorto = (id) => `#${String(id).padStart(2, '0')}`;
+
+async function copiar(texto) {
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch {
+    // respaldo para http sin candado (p. ej. abriendo por la IP del computador)
+    const t = document.createElement('textarea');
+    t.value = texto;
+    t.style.cssText = 'position:fixed;opacity:0';
+    document.body.append(t);
+    t.select();
+    document.execCommand('copy');
+    t.remove();
+  }
+}
+
+const bonito = (s) => String(s ?? '').toLowerCase();
+const capital = (s) => bonito(s).replace(/(^|\s)(\S)/g, (_, a, b) => a + b.toUpperCase());
+
+// ---------- dinero y fechas ----------
+const pesos = (n) => `$${Math.round(n || 0).toLocaleString('es-CO')}`;
+const leerPesos = (s) => Number(soloDigitos(s)) || 0;
+const formatoPesos = (s) => {
+  const n = leerPesos(s);
+  return n ? n.toLocaleString('es-CO') : '';
+};
+function fechaCorta(s, conAnio = true) {
+  if (!s) return '';
+  const f = new Date(`${s.slice(0, 10)}T00:00:00Z`);
+  return f.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', ...(conAnio ? { year: 'numeric' } : {}), timeZone: 'UTC' })
+    .replace('.', '');
+}
+
+/** Campos de dinero: muestran puntos de miles mientras se escribe. */
+function campoDinero(input, alCambiar) {
+  input.addEventListener('input', () => {
+    const fin = input.value.length - input.selectionStart;
+    input.value = formatoPesos(input.value);
+    const pos = Math.max(0, input.value.length - fin);
+    input.setSelectionRange(pos, pos);
+    alCambiar?.();
+  });
+}
+
+function mostrarErroresCampos(formulario, campos) {
+  let primero = null;
+  for (const [campo, msg] of Object.entries(campos)) {
+    const el = formulario.elements[campo];
+    if (el && el.classList) el.classList.add('invalido');
+    const p = formulario.querySelector(`[data-error="${campo}"]`);
+    if (p) p.textContent = msg;
+    primero ??= el?.focus ? el : null;
+  }
+  primero?.focus();
+  primero?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+}
+
+function limpiarErroresDe(formulario) {
+  formulario.querySelectorAll('.invalido').forEach((el) => el.classList.remove('invalido'));
+  formulario.querySelectorAll('[data-error]').forEach((p) => (p.textContent = ''));
+}
+
+const ESTADOS = {
+  al_dia: { texto: 'Al día', clase: 'ok' },
+  atrasado: { texto: 'Atrasado', clase: 'peligro' },
+  pagado: { texto: 'Pagado', clase: 'gris' },
+};
+
+async function api(metodo, ruta, cuerpo) {
+  const r = await fetch(ruta, {
+    method: metodo,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(usuario ? { 'X-Usuario-Id': String(usuario.id) } : {}),
+    },
+    body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+  });
+  const datos = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const e = new Error(datos.error || `Error ${r.status}`);
+    e.campos = datos.campos;
+    e.estado = r.status;
+    throw e;
+  }
+  return datos;
+}
+
+let tAviso;
+function aviso(msg) {
+  const el = $('#aviso');
+  el.innerHTML = `${icono('check')}<span>${esc(msg)}</span>`;
+  // una ventana abierta queda por encima de todo: el aviso se muestra dentro de la de más arriba
+  ([...document.querySelectorAll('dialog[open]')].pop() ?? document.body).append(el);
+  el.hidden = false;
+  clearTimeout(tAviso);
+  tAviso = setTimeout(() => (el.hidden = true), 2600);
+}
+
+function guardarSesion(u) {
+  usuario = u;
+  try {
+    if (u) localStorage.setItem(CLAVE_USUARIO, JSON.stringify(u));
+    else localStorage.removeItem(CLAVE_USUARIO);
+  } catch { /* sin almacenamiento: la sesión dura lo que la pestaña */ }
+}
+
+function leerSesion() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_USUARIO)); } catch { return null; }
+}
+
+// ================= ingreso =================
+let usuarios = [];
+
+async function mostrarIngreso() {
+  $('#vista-app').hidden = true;
+  $('#vista-ingreso').hidden = false;
+  usuarios = await api('GET', '/api/usuarios');
+  $('#bloque-usuarios').hidden = usuarios.length === 0;
+  $('#lista-usuarios').innerHTML = usuarios.map((u) => `
+    <button class="usuario-btn" type="button" data-id="${u.id}">
+      ${avatar(u.nombre, 'avatar-sm')}
+      <span>${esc(bonito(u.nombre))}</span>
+      ${icono('chevron')}
+    </button>`).join('');
+  if (!usuarios.length) $('#nuevo-usuario').focus();
+}
+
+$('#lista-usuarios').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-id]');
+  if (b) entrar(usuarios.find((u) => u.id === Number(b.dataset.id)));
+});
+
+$('#form-usuario').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('#nuevo-usuario');
+  const err = $('#error-usuario');
+  err.hidden = true;
+  if (!input.value.trim()) {
+    err.textContent = 'Escribe un nombre para el usuario.';
+    err.hidden = false;
+    input.focus();
+    return;
+  }
+  try {
+    const u = await api('POST', '/api/usuarios', { nombre: input.value });
+    input.value = '';
+    entrar(u);
+    aviso(`Bienvenido, ${capital(u.nombre)}`);
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.hidden = false;
+  }
+});
+
+function entrar(u) {
+  guardarSesion({ id: u.id, nombre: u.nombre });
+  $('#usuario-avatar').outerHTML = avatar(u.nombre, 'avatar-sm').replace('<span', '<span id="usuario-avatar"');
+  $('#usuario-nombre').textContent = bonito(u.nombre);
+  $('#vista-ingreso').hidden = true;
+  $('#vista-app').hidden = false;
+  $('#buscar').value = '';
+  cargarClientes();
+}
+
+$('#btn-salir').addEventListener('click', () => {
+  guardarSesion(null);
+  mostrarIngreso();
+});
+
+// ================= lista de clientes =================
+async function cargarClientes() {
+  clientes = await api('GET', '/api/clientes');
+  pintarLista();
+}
+
+function coincide(c, q, qDig) {
+  if (!q) return true;
+  const enTexto = [c.nombre, c.direccion, c.direccion2, c.ocupacion].some((v) => sinTildes(v).includes(q));
+  const enTel = qDig.length >= 3 && [c.telefono, c.telefono2, c.whatsapp].some((t) => t && t.includes(qDig));
+  const enRuta = c.ruta != null && (q === String(c.ruta) || q === `ruta ${c.ruta}`);
+  return enTexto || enTel || enRuta;
+}
+
+function resaltar(texto, q) {
+  const original = bonito(texto);
+  if (!q) return esc(original);
+  const i = sinTildes(original).indexOf(q);
+  if (i < 0) return esc(original);
+  return esc(original.slice(0, i)) + `<mark>${esc(original.slice(i, i + q.length))}</mark>` + esc(original.slice(i + q.length));
+}
+
+// ---------- filtros (se recuerdan en este navegador) ----------
+const FILTROS = {
+  todos: { prueba: () => true, vacio: 'No hay clientes con estos filtros.' },
+  hoy: { prueba: (c) => c.por_cobrar_hoy > 0, vacio: 'No hay cobros pendientes para hoy. 🎉' },
+  atrasados: { prueba: (c) => c.atrasado, vacio: 'Ningún cliente está atrasado.' },
+  al_dia: { prueba: (c) => c.contratos_activos > 0 && !c.atrasado, vacio: 'No hay clientes al día con estos filtros.' },
+  sin_deuda: { prueba: (c) => c.contratos_activos === 0, vacio: 'Todos los clientes tienen contratos activos.' },
+};
+
+function leerPreferencia(clave, porDefecto) {
+  try { return localStorage.getItem(clave) ?? porDefecto; } catch { return porDefecto; }
+}
+function guardarPreferencia(clave, valor) {
+  try { localStorage.setItem(clave, valor); } catch { /* sin almacenamiento */ }
+}
+
+let filtro = leerPreferencia('sf.filtro', 'todos');
+if (!FILTROS[filtro]) filtro = 'todos';
+let filtroRuta = leerPreferencia('sf.ruta', '');
+
+$('#filtros').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-filtro]');
+  if (!b) return;
+  filtro = b.dataset.filtro;
+  guardarPreferencia('sf.filtro', filtro);
+  pintarLista();
+});
+
+$('#filtro-ruta').addEventListener('change', (e) => {
+  filtroRuta = e.target.value;
+  guardarPreferencia('sf.ruta', filtroRuta);
+  pintarLista();
+});
+
+function pintarSelectorRutas() {
+  const conteo = new Map();
+  for (const c of clientes) {
+    const k = c.ruta == null ? 'sin' : String(c.ruta);
+    conteo.set(k, (conteo.get(k) ?? 0) + 1);
+  }
+  const rutas = [...conteo.keys()].filter((k) => k !== 'sin').sort((a, b) => a - b);
+  if (filtroRuta && !conteo.has(filtroRuta)) filtroRuta = '';
+  $('#filtro-ruta').innerHTML = `<option value="">Rutas</option>`
+    + rutas.map((r) => `<option value="${r}">Ruta ${r} (${conteo.get(r)})</option>`).join('')
+    + (conteo.has('sin') ? `<option value="sin">Sin ruta (${conteo.get('sin')})</option>` : '');
+  $('#filtro-ruta').value = filtroRuta;
+  $('.selector-ruta').classList.toggle('activo', Boolean(filtroRuta));
+}
+
+function pintarLista() {
+  const q = sinTildes($('#buscar').value.trim());
+  const qDig = soloDigitos(q);
+  pintarSelectorRutas();
+
+  const enRuta = (c) => !filtroRuta || (filtroRuta === 'sin' ? c.ruta == null : String(c.ruta) === filtroRuta);
+  const base = clientes.filter((c) => enRuta(c) && coincide(c, q, qDig));
+  let visibles = base.filter(FILTROS[filtro].prueba);
+  if (filtro === 'atrasados') visibles = [...visibles].sort((a, b) => b.dias_atraso - a.dias_atraso);
+  if (filtro === 'hoy') visibles = [...visibles].sort((a, b) => (a.ruta ?? 1e9) - (b.ruta ?? 1e9) || a.nombre.localeCompare(b.nombre));
+
+  // pestañas con su conteo
+  document.querySelectorAll('#filtros [data-filtro]').forEach((b) => {
+    const activo = b.dataset.filtro === filtro;
+    b.setAttribute('aria-selected', String(activo));
+    b.querySelector('span').textContent = base.filter(FILTROS[b.dataset.filtro].prueba).length;
+  });
+
+  // total del filtro
+  const suma = (campo) => visibles.reduce((s, c) => s + (c[campo] || 0), 0);
+  const total = $('#total-filtro');
+  const textos = {
+    hoy: ['Por cobrar hoy', suma('por_cobrar_hoy'), [
+      suma('cuota_hoy') ? `${pesos(suma('cuota_hoy'))} vence hoy` : '',
+      suma('valor_atrasos') ? `${pesos(suma('valor_atrasos'))} atrasado` : '',
+    ].filter(Boolean).join(' + ')],
+    atrasados: ['Total atrasado', suma('valor_atrasos'), `Saldo de estos clientes: ${pesos(suma('saldo'))}`],
+    al_dia: ['Saldo por cobrar', suma('saldo'), null],
+    todos: ['Cartera total', suma('saldo'), null],
+  };
+  const t = textos[filtro];
+  total.hidden = !t || !visibles.length;
+  if (t) {
+    total.className = `total-filtro ${filtro === 'atrasados' ? 'tono-peligro' : filtro === 'hoy' ? 'tono-aviso' : ''}`;
+    total.innerHTML = `
+      <div><span class="sub">${t[0]}</span><strong>${pesos(t[1])}</strong></div>
+      <span class="sub">${visibles.length} ${visibles.length === 1 ? 'cliente' : 'clientes'}${t[2] ? ` · ${t[2]}` : ''}</span>`;
+  }
+
+  const rutas = new Set(clientes.filter((c) => c.ruta != null).map((c) => c.ruta)).size;
+  $('#resumen').textContent = clientes.length
+    ? `${clientes.length} ${clientes.length === 1 ? 'cliente' : 'clientes'}${rutas ? ` · ${rutas} ${rutas === 1 ? 'ruta' : 'rutas'}` : ''}`
+    : 'Sin clientes registrados';
+
+  const montoDe = (c) => (filtro === 'hoy' ? c.por_cobrar_hoy : filtro === 'atrasados' ? c.valor_atrasos : c.saldo);
+
+  $('#lista-clientes').innerHTML = visibles.map((c) => `
+    <li><button class="cliente" type="button" data-id="${c.id}">
+      ${avatar(c.nombre)}
+      <span class="cliente-info">
+        <span class="cliente-nombre" style="display:block;text-transform:capitalize">${resaltar(c.nombre, q)}</span>
+        <span class="cliente-sub">
+          <span class="tel">${esc(formatoTel(c.telefono))}</span>
+          ${c.ruta != null ? `<span class="tel ruta">Ruta ${esc(c.ruta)}</span>` : ''}
+        </span>
+      </span>
+      <span class="cliente-der">
+        ${c.contratos_activos ? `<span class="monto">${pesos(montoDe(c))}</span>` : ''}
+        ${c.atrasado
+          ? `<span class="etiqueta etiqueta-peligro">${c.dias_atraso} d atraso</span>`
+          : c.cuota_hoy > 0 ? '<span class="etiqueta etiqueta-aviso">Cobra hoy</span>'
+            : c.contratos_activos ? '<span class="etiqueta etiqueta-ok">Al día</span>' : ''}
+      </span>
+      ${icono('chevron')}
+    </button></li>`).join('');
+
+  const vacio = $('#vacio');
+  vacio.hidden = visibles.length > 0;
+  if (!visibles.length) {
+    const sinClientes = clientes.length === 0;
+    $('#vacio-titulo').textContent = sinClientes ? 'Aún no hay clientes' : 'Sin resultados';
+    $('#vacio-texto').textContent = sinClientes
+      ? 'Registra el primer cliente para empezar a llevar sus créditos.'
+      : q ? `Ningún cliente coincide con “${$('#buscar').value.trim()}”.` : FILTROS[filtro].vacio;
+    $('#vacio-accion').hidden = !sinClientes;
+  }
+}
+
+$('#buscar').addEventListener('input', pintarLista);
+
+$('#lista-clientes').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-id]');
+  if (b) abrirFicha(clientes.find((c) => c.id === Number(b.dataset.id)));
+});
+
+// ================= ficha =================
+function dato(ic, titulo, valoresHtml) {
+  return `<div class="dato">${icono(ic)}<div><div class="dato-titulo">${titulo}</div>${valoresHtml}</div></div>`;
+}
+
+function abrirFicha(c) {
+  pintarFicha(c);
+  if (!$('#dlg-detalle').open) $('#dlg-detalle').showModal();
+}
+
+function pintarFicha(c) {
+  clienteAbierto = c;
+  const numero = (t) => `
+    <div class="dato-valor numero">
+      <span>${esc(formatoTel(t))}</span>
+      <button class="btn-copiar" type="button" data-copiar="${esc(t)}" aria-label="Copiar ${esc(formatoTel(t))}">${icono('copy')} Copiar</button>
+    </div>`;
+  const telefonos = [c.telefono, c.telefono2].filter(Boolean).map(numero).join('');
+
+  $('#det-contenido').innerHTML = `
+    <div class="ficha-cabeza">
+      ${avatar(c.nombre, 'avatar-lg')}
+      <h2 class="ficha-nombre">${esc(bonito(c.nombre))}</h2>
+      <div class="ficha-etiquetas">
+        <span class="etiqueta etiqueta-gris">Cliente ${esc(idCorto(c.id))}</span>
+        <span class="etiqueta etiqueta-gris" style="text-transform:capitalize">${icono('work')} ${esc(bonito(c.ocupacion))}</span>
+        ${c.ruta != null ? `<span class="etiqueta">${icono('route')} Ruta ${esc(c.ruta)}</span>` : ''}
+      </div>
+    </div>
+
+    <div class="ficha-acciones">
+      <button class="btn btn-secundario" type="button" id="det-editar">${icono('edit')} Editar cliente</button>
+    </div>
+
+    <section class="seccion">
+      <div class="seccion-cabeza">
+        <h3>Contratos</h3>
+        <button class="btn-chico" type="button" id="det-nuevo-contrato">${icono('plus')} Nuevo contrato</button>
+      </div>
+      <div id="det-contratos" class="contratos"><p class="sub">Cargando…</p></div>
+    </section>
+
+    <div class="ficha-cuerpo">
+      ${dato('phone', 'Teléfonos', telefonos)}
+      ${c.whatsapp ? dato('chat', 'WhatsApp', numero(c.whatsapp)) : ''}
+      ${dato('pin', 'Dirección', `
+        <div class="dato-valor">${esc(bonito(c.direccion))}</div>
+        <div class="dato-valor ${c.direccion2 ? '' : 'dato-vacio'}">${c.direccion2 ? esc(bonito(c.direccion2)) : 'Sin segunda dirección'}</div>`)}
+      ${c.observaciones ? dato('note', 'Observaciones', `<div class="dato-valor normal">${esc(c.observaciones)}</div>`) : ''}
+    </div>
+
+    <div class="ficha-meta">
+      Creado ${esc(c.creado)}${c.creado_por_nombre ? ` por ${esc(capital(c.creado_por_nombre))}` : ''}${c.modificado ? ` · editado ${esc(c.modificado)}` : ''}
+    </div>`;
+
+  $('#det-editar').addEventListener('click', () => {
+    $('#dlg-detalle').close();
+    abrirFormulario(clienteAbierto);
+  });
+  $('#det-nuevo-contrato').addEventListener('click', () => abrirNuevoContrato(clienteAbierto));
+  $('#det-contenido').scrollTop = 0;
+  cargarContratosFicha(c.id);
+}
+
+function tarjetaContrato(k) {
+  const e = k.estado;
+  const est = ESTADOS[e.estado];
+  const avance = Math.round((e.cuotasPagas / k.num_cuotas) * 100);
+  const detalle = e.estado === 'atrasado'
+    ? `${e.cuotasAtraso} ${e.cuotasAtraso === 1 ? 'cuota' : 'cuotas'} atrasada${e.cuotasAtraso === 1 ? '' : 's'} · ${e.diasAtraso} días`
+    : e.estado === 'pagado'
+      ? `Terminó de pagar ${fechaCorta(e.fechaUltimoAbono)}`
+      : `Próxima cuota ${fechaCorta(e.proximaCuota?.fecha, false)}`;
+  return `
+    <button class="contrato" type="button" data-contrato="${k.id}">
+      <div class="contrato-fila">
+        <span class="contrato-titulo">Contrato ${idCorto(k.id)} · ${FORMAS_PAGO[k.forma_pago]}</span>
+        <span class="etiqueta etiqueta-${est.clase}">${est.texto}</span>
+      </div>
+      <div class="contrato-fila">
+        <span class="contrato-saldo">${pesos(e.saldo)}</span>
+        <span class="sub">${e.cuotasPagas}/${k.num_cuotas} cuotas de ${pesos(k.valor_cuota)}</span>
+      </div>
+      <div class="barra-avance ${est.clase}"><span style="width:${avance}%"></span></div>
+      <div class="sub contrato-detalle">${detalle}</div>
+    </button>`;
+}
+
+async function cargarContratosFicha(clienteId) {
+  const cont = $('#det-contratos');
+  try {
+    const lista = await api('GET', `/api/clientes/${clienteId}/contratos`);
+    if (clienteAbierto?.id !== clienteId || !document.body.contains(cont)) return;
+    cont.innerHTML = lista.length
+      ? lista.map(tarjetaContrato).join('')
+      : '<p class="sub vacio-chico">Este cliente no tiene contratos todavía.</p>';
+  } catch (ex) {
+    cont.innerHTML = `<p class="error-campo">${esc(ex.message)}</p>`;
+  }
+}
+
+// ================= contrato (vista) =================
+let contratoAbierto = null;
+
+async function abrirContrato(id) {
+  const k = await api('GET', `/api/contratos/${id}`);
+  pintarContrato(k);
+  if (!$('#dlg-detalle').open) $('#dlg-detalle').showModal();
+}
+
+function filaInfo(etiqueta, valor, clase = '') {
+  return `<div class="info-fila ${clase}"><dt>${etiqueta}</dt><dd>${valor}</dd></div>`;
+}
+
+function pintarContrato(k) {
+  contratoAbierto = k;
+  const e = k.estado;
+  const est = ESTADOS[e.estado];
+  const avance = Math.round((e.cuotasPagas / k.num_cuotas) * 100);
+
+  const plan = e.plan.map((c) => {
+    const etiquetas = {
+      pagada: ['Pagada', 'ok'], vencida: ['Vencida', 'peligro'], hoy: ['Hoy', 'aviso'],
+      parcial: ['Abonada', 'aviso'], pendiente: ['Pendiente', 'gris'],
+    };
+    const [txt, cls] = etiquetas[c.estado];
+    const abono = c.pagado > 0 && c.pagado < c.valor ? ` <span class="sub">(abonó ${pesos(c.pagado)})</span>` : '';
+    return `<li class="cuota cuota-${c.estado}">
+      <span class="cuota-num">${c.numero}</span>
+      <span class="cuota-fecha">${fechaCorta(c.fecha)}${abono}</span>
+      <span class="etiqueta etiqueta-${cls}">${txt}</span>
+    </li>`;
+  }).join('');
+
+  const pagos = k.pagos.length
+    ? k.pagos.map((p) => `
+      <li class="pago ${p.anulado ? 'pago-anulado' : ''}">
+        <div class="pago-info">
+          <div class="pago-valor">${pesos(p.abono)}${p.int_mora ? ` <span class="sub">+ ${pesos(p.int_mora)} mora</span>` : ''}</div>
+          <div class="sub">${fechaCorta(p.fecha)} · ${esc(capital(p.creado_por_nombre ?? ''))}${p.observacion ? ` · ${esc(p.observacion)}` : ''}</div>
+          ${p.anulado ? `<div class="sub">Anulado por ${esc(capital(p.anulado_por_nombre ?? ''))} el ${esc(p.anulado_en)}</div>` : ''}
+        </div>
+        ${p.anulado ? '<span class="etiqueta etiqueta-gris">Anulado</span>' : `<button class="btn-chico btn-chico-peligro" type="button" data-anular="${p.id}">Anular</button>`}
+      </li>`).join('')
+    : '<p class="sub vacio-chico">Aún no hay pagos registrados.</p>';
+
+  $('#det-contenido').innerHTML = `
+    <div class="contrato-cabeza">
+      <button class="btn-icono" type="button" id="k-volver" aria-label="Volver al cliente">${icono('back')}</button>
+      <div>
+        <h2>Contrato ${idCorto(k.id)}</h2>
+        <p class="sub" style="text-transform:capitalize">${esc(bonito(k.cliente_nombre))}</p>
+      </div>
+    </div>
+
+    <div class="saldo-grande">
+      <div class="contrato-fila">
+        <span class="sub">Saldo</span>
+        <span class="etiqueta etiqueta-${est.clase}">${est.texto}</span>
+      </div>
+      <div class="saldo-valor">${pesos(e.saldo)}</div>
+      <div class="barra-avance ${est.clase}"><span style="width:${avance}%"></span></div>
+      <div class="sub">${e.cuotasPagas} de ${k.num_cuotas} cuotas pagas · crédito ${pesos(k.credito)}</div>
+    </div>
+
+    ${e.estado === 'atrasado' ? `
+      <div class="alerta">${icono('alert')}
+        <div><strong>${e.cuotasAtraso} ${e.cuotasAtraso === 1 ? 'cuota atrasada' : 'cuotas atrasadas'} · ${e.diasAtraso} días</strong>
+        <div>Debe ponerse al día con ${pesos(e.valorAtrasos)}</div></div>
+      </div>` : ''}
+
+    ${e.estado !== 'pagado' ? `
+      <div class="ficha-acciones">
+        <button class="btn btn-primario btn-ancho" type="button" id="k-pagar">${icono('cash')} Registrar pago</button>
+      </div>` : ''}
+
+    <section class="seccion">
+      <div class="seccion-cabeza"><h3>Información del contrato</h3></div>
+      <dl class="info">
+        ${filaInfo('Inicio', fechaCorta(k.fecha_inicio))}
+        ${filaInfo('1ra cuota', fechaCorta(k.fecha_primera_cuota))}
+        ${filaInfo('Últ. cuota', fechaCorta(e.fechaUltimaCuota))}
+        ${filaInfo('Forma de pago', FORMAS_PAGO[k.forma_pago])}
+        ${filaInfo('Préstamo', pesos(k.prestamo))}
+        ${filaInfo('Interés', `${String(k.interes).replace('.', ',')}%`)}
+        ${filaInfo('Crédito', pesos(k.credito))}
+        ${filaInfo('N° cuotas', k.num_cuotas)}
+        ${filaInfo('Valor cuota', pesos(k.valor_cuota))}
+        ${filaInfo('Cuotas pagas', e.cuotasPagas)}
+        ${filaInfo('Cuotas pendientes', e.cuotasPendientes)}
+        ${filaInfo('Picos', pesos(e.picos))}
+        ${filaInfo('Atrasos', `C:${e.cuotasAtraso} D:${e.diasAtraso}`, e.cuotasAtraso ? 'peligro' : '')}
+        ${filaInfo('Valor atrasos', pesos(e.valorAtrasos), e.valorAtrasos ? 'peligro' : '')}
+        ${filaInfo('Cuotas adelantadas', e.cuotasAdelantadas.toLocaleString('es-CO', { minimumFractionDigits: 2 }))}
+        ${filaInfo('Valor adelantos', pesos(e.valorAdelantos))}
+        ${filaInfo('Fecha últ. abono', e.fechaUltimoAbono ? fechaCorta(e.fechaUltimoAbono) : 'No tiene abonos')}
+        ${filaInfo('Valor últ. abono', pesos(e.valorUltimoAbono))}
+        ${filaInfo('Abonos al crédito', pesos(e.abonoCredito))}
+        ${filaInfo('Abonos int. mora', pesos(e.abonoMora))}
+        ${filaInfo('Total abonos', pesos(e.totalAbonos))}
+        ${filaInfo('Saldo crédito', pesos(e.saldo), 'fuerte')}
+      </dl>
+      ${k.observaciones ? `<p class="nota">${esc(k.observaciones)}</p>` : ''}
+    </section>
+
+    <section class="seccion">
+      <details class="plegable">
+        <summary><h3>Cuotas</h3><span class="sub">${e.cuotasPagas}/${k.num_cuotas}</span></summary>
+        <ol class="cuotas">${plan}</ol>
+      </details>
+    </section>
+
+    <section class="seccion">
+      <div class="seccion-cabeza"><h3>Pagos</h3><span class="sub">${k.pagos.filter((p) => !p.anulado).length}</span></div>
+      <ul class="pagos">${pagos}</ul>
+    </section>
+
+    <div class="ficha-meta">
+      Creado ${esc(k.creado)}${k.creado_por_nombre ? ` por ${esc(capital(k.creado_por_nombre))}` : ''}
+    </div>`;
+
+  $('#det-contenido').scrollTop = 0;
+  $('#k-volver').addEventListener('click', () => {
+    const c = clientes.find((x) => x.id === k.cliente_id);
+    if (c) pintarFicha(c);
+  });
+  $('#k-pagar')?.addEventListener('click', () => abrirPago(contratoAbierto));
+}
+
+$('#det-contenido').addEventListener('click', async (e) => {
+  const tarjeta = e.target.closest('[data-contrato]');
+  if (tarjeta) {
+    abrirContrato(Number(tarjeta.dataset.contrato)).catch((ex) => aviso(ex.message));
+    return;
+  }
+  const anular = e.target.closest('[data-anular]');
+  if (anular) {
+    const p = contratoAbierto.pagos.find((x) => x.id === Number(anular.dataset.anular));
+    if (!confirm(`¿Anular el pago de ${pesos(p.abono + p.int_mora)} del ${fechaCorta(p.fecha)}?\nEl saldo del contrato volverá a subir.`)) return;
+    try {
+      const k = await api('POST', `/api/pagos/${p.id}/anular`);
+      pintarContrato(k);
+      cargarClientes();
+      aviso('Pago anulado');
+    } catch (ex) {
+      aviso(ex.message);
+    }
+  }
+});
+
+// ================= nuevo contrato =================
+const formK = $('#form-contrato');
+let cuotaManual = false;
+let primeraManual = false;
+let clienteContrato = null;
+
+function abrirNuevoContrato(c) {
+  clienteContrato = c;
+  formK.reset();
+  limpiarErroresDe(formK);
+  cuotaManual = false;
+  primeraManual = false;
+  $('#contrato-cliente').textContent = capital(c.nombre);
+  formK.elements.fecha_inicio.value = hoyLocal();
+  formK.elements.interes.value = 20;
+  recalcularContrato();
+  $('#dlg-contrato').showModal();
+  $('#dlg-contrato .hoja-cuerpo').scrollTop = 0;
+}
+
+function recalcularContrato() {
+  const f = formK.elements;
+  const forma = f.forma_pago.value;
+  const prestamo = leerPesos(f.prestamo.value);
+  const n = Number(f.num_cuotas.value) || 0;
+  const interes = Number(f.interes.value) || 0;
+
+  if (f.fecha_inicio.value && !primeraManual) f.fecha_primera_cuota.value = primeraCuotaSugerida(f.fecha_inicio.value, forma);
+  if (!cuotaManual) f.valor_cuota.value = formatoPesos(String(cuotaSugerida(prestamo, interes, n)));
+
+  const ayudas = {
+    D: 'Se cobra todos los días, menos los domingos.',
+    S: 'Se cobra cada 7 días, el mismo día de la semana.',
+    Q: 'Se cobra dos veces al mes, en los mismos dos días (por ejemplo 1 y 16).',
+    M: 'Se cobra una vez al mes, el mismo día.',
+  };
+  $('#ayuda-forma').textContent = ayudas[forma];
+
+  const vc = leerPesos(f.valor_cuota.value);
+  const resumen = $('#k-resumen');
+  if (!prestamo || !n || !vc || !f.fecha_primera_cuota.value) {
+    resumen.innerHTML = '<p class="sub">Escribe el valor prestado y el número de cuotas para ver el resumen.</p>';
+    return;
+  }
+  const credito = vc * n;
+  const interesReal = ((credito / prestamo) - 1) * 100;
+  const fechas = cronograma(f.fecha_primera_cuota.value, forma, n);
+  const dias = forma === 'Q'
+    ? [...new Set(fechas.slice(0, 2).map((x) => Number(x.slice(8))))].sort((a, b) => a - b).join(' y ')
+    : null;
+  resumen.innerHTML = `
+    <div class="resumen-total">
+      <span class="sub">Total a pagar</span>
+      <strong>${pesos(credito)}</strong>
+    </div>
+    <dl class="info">
+      ${filaInfo('Cuotas', `${n} × ${pesos(vc)}`)}
+      ${filaInfo('Ganancia', `${pesos(credito - prestamo)} (${interesReal.toLocaleString('es-CO', { maximumFractionDigits: 2 })}%)`, credito < prestamo ? 'peligro' : '')}
+      ${filaInfo('1ra cuota', fechaCorta(fechas[0]))}
+      ${filaInfo('Última cuota', fechaCorta(fechas[fechas.length - 1]))}
+      ${dias ? filaInfo('Días de cobro', `${dias} de cada mes`) : ''}
+    </dl>`;
+}
+
+campoDinero(formK.elements.prestamo, recalcularContrato);
+campoDinero(formK.elements.valor_cuota, () => { cuotaManual = formK.elements.valor_cuota.value !== ''; recalcularContrato(); });
+formK.elements.num_cuotas.addEventListener('input', recalcularContrato);
+formK.elements.interes.addEventListener('input', () => { cuotaManual = false; recalcularContrato(); });
+formK.elements.fecha_inicio.addEventListener('input', recalcularContrato);
+formK.elements.fecha_primera_cuota.addEventListener('input', () => { primeraManual = true; recalcularContrato(); });
+formK.querySelectorAll('[name="forma_pago"]').forEach((r) => r.addEventListener('change', () => { primeraManual = false; recalcularContrato(); }));
+formK.addEventListener('input', (e) => {
+  if (!e.target.name) return;
+  e.target.classList.remove('invalido');
+  const p = formK.querySelector(`[data-error="${e.target.name}"]`);
+  if (p) p.textContent = '';
+});
+
+formK.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  limpiarErroresDe(formK);
+  const f = formK.elements;
+  const btn = $('#btn-guardar-contrato');
+  btn.disabled = true;
+  try {
+    const k = await api('POST', '/api/contratos', {
+      cliente_id: clienteContrato.id,
+      forma_pago: f.forma_pago.value,
+      prestamo: leerPesos(f.prestamo.value),
+      num_cuotas: Number(f.num_cuotas.value) || 0,
+      valor_cuota: leerPesos(f.valor_cuota.value),
+      fecha_inicio: f.fecha_inicio.value,
+      fecha_primera_cuota: f.fecha_primera_cuota.value,
+      observaciones: f.observaciones.value,
+    });
+    $('#dlg-contrato').close();
+    await cargarClientes();
+    pintarContrato(k);
+    if (!$('#dlg-detalle').open) $('#dlg-detalle').showModal();
+    aviso(`Contrato ${idCorto(k.id)} creado`);
+  } catch (ex) {
+    if (ex.campos) mostrarErroresCampos(formK, ex.campos);
+    else aviso(ex.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ================= registro de pago =================
+const formP = $('#form-pago');
+
+function tablaResumen(filas) {
+  return `<dl>${filas.map(([a, b, cls = '']) => `<div class="${cls}"><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl>`;
+}
+
+function abrirPago(k) {
+  formP.reset();
+  limpiarErroresDe(formP);
+  const e = k.estado;
+  $('#pago-contrato').textContent = `Contrato ${idCorto(k.id)} · ${capital(k.cliente_nombre)}`;
+  $('#pago-antes').innerHTML = tablaResumen([
+    ['Atrasos', `C:${e.cuotasAtraso} D:${e.diasAtraso}`, e.cuotasAtraso ? 'peligro' : ''],
+    ['Valor cuota', pesos(k.valor_cuota)],
+    ['Cuotas pagas', `${e.cuotasPagas} de ${k.num_cuotas}`],
+    ['Picos', pesos(e.picos)],
+    ['Saldo crédito', pesos(e.saldo), 'fuerte'],
+  ]);
+
+  const rapidos = [];
+  const faltaCuota = k.valor_cuota - e.picos;
+  rapidos.push([e.picos ? `Completar cuota ${pesos(faltaCuota)}` : `1 cuota ${pesos(k.valor_cuota)}`, Math.min(faltaCuota, e.saldo)]);
+  if (e.valorAtrasos > 0 && e.valorAtrasos !== faltaCuota) rapidos.push([`Ponerse al día ${pesos(e.valorAtrasos)}`, e.valorAtrasos]);
+  rapidos.push([`Todo el saldo ${pesos(e.saldo)}`, e.saldo]);
+  $('#p-rapidos').innerHTML = rapidos.map(([t, v]) => `<button type="button" data-valor="${v}">${t}</button>`).join('');
+
+  formP.elements.fecha.value = hoyLocal();
+  previsualizarPago();
+  $('#dlg-pago').showModal();
+  if (!matchMedia('(pointer: coarse)').matches) formP.elements.abono.focus();
+}
+
+function previsualizarPago() {
+  const k = contratoAbierto;
+  const abono = leerPesos(formP.elements.abono.value);
+  const mora = leerPesos(formP.elements.int_mora.value);
+  const despues = $('#pago-despues');
+  if (!abono && !mora) {
+    despues.hidden = true;
+    return;
+  }
+  const simulado = estadoContrato(k, [...k.pagos, { id: 1e9, fecha: formP.elements.fecha.value || hoyLocal(), abono, int_mora: mora }]);
+  const pasa = abono > k.estado.saldo;
+  despues.hidden = false;
+  despues.innerHTML = `<p class="tabla-titulo">Después de este pago</p>` + tablaResumen([
+    ['Cuotas pagas', `${simulado.cuotasPagas} de ${k.num_cuotas}`],
+    ['Picos', pesos(simulado.picos)],
+    ['Atrasos', `C:${simulado.cuotasAtraso} D:${simulado.diasAtraso}`, simulado.cuotasAtraso ? 'peligro' : ''],
+    ['Total recibido', pesos(abono + mora)],
+    ['Saldo crédito', pasa ? 'El abono supera el saldo' : pesos(simulado.saldo), pasa ? 'peligro fuerte' : 'fuerte'],
+  ]);
+}
+
+campoDinero(formP.elements.abono, previsualizarPago);
+campoDinero(formP.elements.int_mora, previsualizarPago);
+formP.elements.fecha.addEventListener('input', previsualizarPago);
+formP.addEventListener('input', (e) => {
+  if (!e.target.name) return;
+  e.target.classList.remove('invalido');
+  const p = formP.querySelector(`[data-error="${e.target.name}"]`);
+  if (p) p.textContent = '';
+});
+
+$('#p-rapidos').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-valor]');
+  if (!b) return;
+  formP.elements.abono.value = formatoPesos(b.dataset.valor);
+  formP.elements.abono.classList.remove('invalido');
+  formP.querySelector('[data-error="abono"]').textContent = '';
+  previsualizarPago();
+});
+
+formP.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  limpiarErroresDe(formP);
+  const f = formP.elements;
+  const btn = $('#btn-guardar-pago');
+  btn.disabled = true;
+  try {
+    const abono = leerPesos(f.abono.value);
+    const mora = leerPesos(f.int_mora.value);
+    const k = await api('POST', `/api/contratos/${contratoAbierto.id}/pagos`, {
+      fecha: f.fecha.value, abono, int_mora: mora, observacion: f.observacion.value,
+    });
+    $('#dlg-pago').close();
+    pintarContrato(k);
+    cargarClientes();
+    aviso(k.estado.estado === 'pagado' ? '¡Contrato pagado por completo!' : `Pago de ${pesos(abono + mora)} registrado`);
+  } catch (ex) {
+    if (ex.campos) mostrarErroresCampos(formP, ex.campos);
+    else aviso(ex.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ================= formulario =================
+const form = $('#form-cliente');
+const chkWa = $('#f-mismo-wa');
+
+function pintarSugerencias() {
+  const usadas = clientes.map((c) => c.ocupacion);
+  const todas = [...new Set([...OCUPACIONES_BASE, ...usadas])].slice(0, 10);
+  const actual = form.elements.ocupacion.value.trim().toUpperCase();
+  $('#sug-ocupacion').innerHTML = todas.map((o) =>
+    `<button type="button" data-ocupacion="${esc(o)}" aria-pressed="${o === actual}">${esc(bonito(o))}</button>`).join('');
+}
+
+$('#sug-ocupacion').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ocupacion]');
+  if (!b) return;
+  form.elements.ocupacion.value = b.dataset.ocupacion;
+  limpiarError('ocupacion');
+  pintarSugerencias();
+});
+form.elements.ocupacion.addEventListener('input', pintarSugerencias);
+
+function sincronizarWhatsapp() {
+  $('#campo-whatsapp').hidden = chkWa.checked;
+  if (chkWa.checked) {
+    form.elements.whatsapp.value = form.elements.telefono.value;
+    limpiarError('whatsapp');
+  }
+}
+chkWa.addEventListener('change', () => {
+  sincronizarWhatsapp();
+  if (!chkWa.checked) form.elements.whatsapp.focus();
+});
+
+for (const nombre of ['telefono', 'telefono2', 'whatsapp']) {
+  form.elements[nombre].addEventListener('input', (e) => {
+    e.target.value = formatoTel(e.target.value);
+    if (nombre === 'telefono' && chkWa.checked) form.elements.whatsapp.value = e.target.value;
+  });
+}
+
+function limpiarError(campo) {
+  form.elements[campo]?.classList.remove('invalido');
+  const p = form.querySelector(`[data-error="${campo}"]`);
+  if (p) p.textContent = '';
+}
+
+function limpiarErrores() {
+  form.querySelectorAll('.invalido').forEach((el) => el.classList.remove('invalido'));
+  form.querySelectorAll('[data-error]').forEach((p) => (p.textContent = ''));
+}
+
+form.addEventListener('input', (e) => { if (e.target.name) limpiarError(e.target.name); });
+
+function abrirFormulario(c) {
+  form.reset();
+  limpiarErrores();
+  editandoId = c?.id ?? null;
+  $('#form-titulo').textContent = c ? 'Editar cliente' : 'Nuevo cliente';
+  if (c) {
+    for (const campo of ['nombre', 'direccion', 'direccion2', 'ocupacion', 'ruta', 'observaciones']) {
+      form.elements[campo].value = c[campo] ?? '';
+    }
+    for (const campo of ['telefono', 'telefono2', 'whatsapp']) form.elements[campo].value = formatoTel(c[campo]);
+    chkWa.checked = Boolean(c.whatsapp) && c.whatsapp === c.telefono;
+  } else {
+    chkWa.checked = true; // la mayoría de celulares tienen WhatsApp
+  }
+  sincronizarWhatsapp();
+  pintarSugerencias();
+  $('#dlg-form').showModal();
+  $('#dlg-form .hoja-cuerpo').scrollTop = 0;
+  if (!matchMedia('(pointer: coarse)').matches) form.elements.nombre.focus();
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  sincronizarWhatsapp();
+  limpiarErrores();
+  const datos = Object.fromEntries(new FormData(form));
+  const btn = $('#btn-guardar');
+  btn.disabled = true;
+  try {
+    const c = editandoId
+      ? await api('PUT', `/api/clientes/${editandoId}`, datos)
+      : await api('POST', '/api/clientes', datos);
+    $('#dlg-form').close();
+    await cargarClientes();
+    aviso(editandoId ? 'Cambios guardados' : 'Cliente registrado');
+    if (editandoId) abrirFicha(clientes.find((x) => x.id === c.id) ?? c);
+  } catch (ex) {
+    if (ex.campos) {
+      let primero = null;
+      for (const [campo, msg] of Object.entries(ex.campos)) {
+        // si el error es del WhatsApp oculto, mostrarlo
+        if (campo === 'whatsapp' && chkWa.checked) { chkWa.checked = false; sincronizarWhatsapp(); }
+        form.elements[campo]?.classList.add('invalido');
+        const p = form.querySelector(`[data-error="${campo}"]`);
+        if (p) p.textContent = msg;
+        primero ??= form.elements[campo];
+      }
+      primero?.focus();
+      primero?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else if (ex.estado === 401) {
+      $('#dlg-form').close();
+      guardarSesion(null);
+      mostrarIngreso();
+    } else {
+      aviso(ex.message);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ================= diálogos =================
+for (const id of ['#btn-nuevo', '#fab-nuevo', '#vacio-accion']) {
+  $(id).addEventListener('click', () => abrirFormulario(null));
+}
+
+document.addEventListener('click', (e) => {
+  const cerrar = e.target.closest('[data-cerrar]');
+  if (cerrar) cerrar.closest('dialog').close();
+});
+
+$('#det-contenido').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-copiar]');
+  if (!b) return;
+  await copiar(b.dataset.copiar);
+  aviso(`Número ${formatoTel(b.dataset.copiar)} copiado`);
+});
+
+// clic en el fondo oscuro cierra la ficha (el formulario no, para no perder lo escrito)
+$('#dlg-detalle').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.close();
+});
+
+// ================= páginas =================
+let pagina = 'clientes';
+
+function irA(nueva) {
+  pagina = nueva;
+  $('#pagina-clientes').hidden = nueva !== 'clientes';
+  $('#pagina-totales').hidden = nueva !== 'totales';
+  $('#fab-nuevo').hidden = nueva !== 'clientes';
+  document.querySelectorAll('.pestanas [data-pagina]').forEach((b) => {
+    if (b.dataset.pagina === nueva) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
+  window.scrollTo(0, 0);
+  if (nueva === 'totales') cargarTotales();
+}
+
+$('.pestanas').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pagina]');
+  if (b) irA(b.dataset.pagina);
+});
+
+// ================= totales =================
+const CONCEPTOS = [
+  ['registros', 'Contratos', (n) => n.toLocaleString('es-CO')],
+  ['prestamos', 'Préstamos', pesos],
+  ['creditos', 'Créditos', pesos],
+  ['cuotas_dia', 'Cuotas día', pesos],
+  ['cuotas', 'Cuotas', pesos],
+  ['atrasos_dia', 'Atrasos día', pesos],
+  ['atrasos', 'Atrasos', pesos],
+  ['saldo_creditos', 'Saldo créditos', pesos],
+  ['saldo_mora', 'Saldo int. mora', pesos],
+  ['total_saldos', 'Total saldos', pesos],
+];
+
+async function cargarTotales() {
+  const sel = $('#totales-ruta');
+  sel.innerHTML = $('#filtro-ruta').innerHTML;
+  sel.value = filtroRuta;
+  sel.closest('.selector-ruta').classList.toggle('activo', Boolean(filtroRuta));
+  $('#totales-fecha').textContent = `Hoy, ${fechaCorta(hoyLocal())} · ${filtroRuta ? (filtroRuta === 'sin' ? 'sin ruta' : `ruta ${filtroRuta}`) : 'todas las rutas'}`;
+  try {
+    const t = await api('GET', `/api/totales${filtroRuta ? `?ruta=${encodeURIComponent(filtroRuta)}` : ''}`);
+    pintarTotales(t);
+  } catch (ex) {
+    $('#totales-contenido').innerHTML = `<p class="error-campo">${esc(ex.message)}</p>`;
+  }
+}
+
+$('#totales-ruta').addEventListener('change', (e) => {
+  filtroRuta = e.target.value;
+  guardarPreferencia('sf.ruta', filtroRuta);
+  pintarLista();
+  cargarTotales();
+});
+
+function pintarTotales({ nuevos, total, porRuta }) {
+  const kpi = (titulo, valor, nota, clase = '') => `
+    <div class="kpi ${clase}">
+      <span class="kpi-titulo">${titulo}</span>
+      <strong>${valor}</strong>
+      ${nota ? `<span class="kpi-nota">${nota}</span>` : ''}
+    </div>`;
+
+  const pendienteHoy = total.atrasos - total.atrasos_dia;
+
+  $('#totales-contenido').innerHTML = `
+    <div class="kpi-principal">
+      <span class="sub">Total saldos</span>
+      <strong>${pesos(total.total_saldos)}</strong>
+      <span class="sub">${total.registros} contratos activos · prestado ${pesos(total.prestamos)}</span>
+    </div>
+
+    <div class="kpis">
+      ${kpi('Cuotas día', pesos(total.cuotas_dia), 'Lo que vence hoy', 'tono-aviso')}
+      ${kpi('Atrasos', pesos(total.atrasos), pendienteHoy ? `Incluye ${pesos(pendienteHoy)} de hoy sin pagar` : 'Todo lo que se debe a hoy', 'tono-peligro')}
+      ${kpi('Atrasos día', pesos(total.atrasos_dia), 'Vencido hasta ayer')}
+      ${kpi('Cuotas', pesos(total.cuotas), 'Suma de una cuota por contrato')}
+    </div>
+
+    <section class="tarjeta-tabla">
+      <h3>Como en el listado</h3>
+      <div class="tabla-scroll">
+        <table class="tabla">
+          <thead><tr><th></th><th>Hoy</th><th>Total</th></tr></thead>
+          <tbody>
+            ${CONCEPTOS.map(([campo, nombre, fmt]) => `
+              <tr class="${campo === 'total_saldos' ? 'fila-total' : ''}">
+                <th>${nombre}</th><td>${fmt(nuevos[campo])}</td><td>${fmt(total[campo])}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="sub nota-tabla">Hoy: préstamos que empiezan hoy (aún sin pagos ni cuotas). Total: todos los contratos activos. Saldo int. mora queda en $0 porque la mora se cobra a mano en cada pago.</p>
+    </section>
+
+    ${!filtroRuta && porRuta.length > 1 ? `
+      <section class="tarjeta-tabla">
+        <h3>Por ruta</h3>
+        <div class="tabla-scroll">
+          <table class="tabla tabla-rutas">
+            <thead><tr><th>Ruta</th><th>#</th><th>Cuotas día</th><th>Atrasos</th><th>Saldo</th></tr></thead>
+            <tbody>
+              ${porRuta.map((r) => `
+                <tr data-ruta="${r.ruta ?? 'sin'}" tabindex="0">
+                  <th>${r.ruta ?? 'Sin ruta'}</th>
+                  <td>${r.registros}</td>
+                  <td>${pesos(r.cuotas_dia)}</td>
+                  <td class="${r.atrasos ? 'rojo' : ''}">${pesos(r.atrasos)}</td>
+                  <td>${pesos(r.total_saldos)}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+        <p class="sub nota-tabla">Toca una ruta para ver solo sus totales.</p>
+      </section>` : ''}`;
+}
+
+$('#totales-contenido').addEventListener('click', (e) => {
+  const fila = e.target.closest('[data-ruta]');
+  if (!fila) return;
+  filtroRuta = fila.dataset.ruta;
+  guardarPreferencia('sf.ruta', filtroRuta);
+  pintarLista();
+  cargarTotales();
+});
+
+// ================= inicio =================
+(async function iniciar() {
+  const guardado = leerSesion();
+  if (guardado) {
+    const lista = await api('GET', '/api/usuarios');
+    const u = lista.find((x) => x.id === guardado.id);
+    if (u) return entrar(u);
+    guardarSesion(null);
+  }
+  mostrarIngreso();
+})();

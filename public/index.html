@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d6b5a">
+  <title>Soluciones Financieras</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Íconos -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+      <symbol id="i-work" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></symbol>
+      <symbol id="i-note" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></symbol>
+      <symbol id="i-route" viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+      <symbol id="i-cash" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- ===================== INGRESO ===================== -->
+  <section id="vista-ingreso" class="ingreso" hidden>
+    <div class="ingreso-caja">
+      <div class="logo-grande" aria-hidden="true">SF</div>
+      <h1>Soluciones Financieras</h1>
+      <p class="sub">Control de créditos y cobros</p>
+
+      <div class="panel">
+        <div id="bloque-usuarios">
+          <h2 class="panel-titulo">¿Quién eres?</h2>
+          <div id="lista-usuarios" class="usuarios"></div>
+          <div class="separador"><span>o crea un usuario nuevo</span></div>
+        </div>
+
+        <form id="form-usuario" class="crear-usuario" autocomplete="off" novalidate>
+          <label class="sr" for="nuevo-usuario">Nombre del usuario</label>
+          <input id="nuevo-usuario" class="mayus" maxlength="40" placeholder="Tu nombre">
+          <button class="btn btn-primario" type="submit">
+            Entrar <svg class="ic"><use href="#i-arrow"/></svg>
+          </button>
+        </form>
+        <p class="error-campo" id="error-usuario" hidden></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== APLICACIÓN ===================== -->
+  <section id="vista-app" class="app" hidden>
+    <header class="topbar">
+      <div class="topbar-in">
+        <div class="logo" aria-hidden="true">SF</div>
+        <span class="topbar-nombre">Soluciones Financieras</span>
+        <nav class="pestanas" aria-label="Secciones">
+          <button type="button" data-pagina="clientes" aria-current="page">Clientes</button>
+          <button type="button" data-pagina="totales">Totales</button>
+        </nav>
+        <div class="topbar-usuario">
+          <span class="avatar avatar-sm" id="usuario-avatar"></span>
+          <span class="topbar-usuario-nombre" id="usuario-nombre"></span>
+          <button class="btn-icono" id="btn-salir" type="button" title="Cambiar de usuario" aria-label="Cambiar de usuario">
+            <svg class="ic"><use href="#i-logout"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="contenido" id="pagina-totales" hidden>
+      <div class="titulo-pagina">
+        <div>
+          <h1>Totales</h1>
+          <p class="sub" id="totales-fecha"></p>
+        </div>
+        <label class="selector-ruta">
+          <svg class="ic"><use href="#i-route"/></svg>
+          <select id="totales-ruta" aria-label="Filtrar totales por ruta"></select>
+        </label>
+      </div>
+      <div id="totales-contenido"><p class="sub">Cargando…</p></div>
+    </main>
+
+    <main class="contenido" id="pagina-clientes">
+      <div class="titulo-pagina">
+        <div>
+          <h1>Clientes</h1>
+          <p class="sub" id="resumen">Cargando…</p>
+        </div>
+        <button class="btn btn-primario solo-escritorio" id="btn-nuevo" type="button">
+          <svg class="ic"><use href="#i-plus"/></svg> Nuevo cliente
+        </button>
+      </div>
+
+      <div class="barra-busqueda">
+        <div class="buscador">
+          <svg class="ic"><use href="#i-search"/></svg>
+          <input id="buscar" type="search" placeholder="Buscar nombre, teléfono o dirección" autocomplete="off" aria-label="Buscar clientes">
+        </div>
+        <label class="selector-ruta">
+          <svg class="ic"><use href="#i-route"/></svg>
+          <select id="filtro-ruta" aria-label="Filtrar por ruta">
+            <option value="">Todas</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="filtros" id="filtros" role="tablist" aria-label="Filtrar clientes">
+        <button type="button" role="tab" data-filtro="todos">Todos <span></span></button>
+        <button type="button" role="tab" data-filtro="hoy">Cobrar hoy <span></span></button>
+        <button type="button" role="tab" data-filtro="atrasados">Atrasados <span></span></button>
+        <button type="button" role="tab" data-filtro="al_dia">Al día <span></span></button>
+        <button type="button" role="tab" data-filtro="sin_deuda">Sin deuda <span></span></button>
+      </div>
+
+      <div class="total-filtro" id="total-filtro" hidden></div>
+
+      <ul id="lista-clientes" class="clientes" aria-live="polite"></ul>
+
+      <div id="vacio" class="vacio" hidden>
+        <div class="vacio-icono"><svg class="ic"><use href="#i-users"/></svg></div>
+        <h3 id="vacio-titulo"></h3>
+        <p id="vacio-texto"></p>
+        <button class="btn btn-primario" id="vacio-accion" type="button">
+          <svg class="ic"><use href="#i-plus"/></svg> Crear el primer cliente
+        </button>
+      </div>
+    </main>
+
+    <button class="fab solo-movil" id="fab-nuevo" type="button" aria-label="Nuevo cliente">
+      <svg class="ic"><use href="#i-plus"/></svg>
+    </button>
+  </section>
+
+  <!-- ===================== FICHA DEL CLIENTE ===================== -->
+  <dialog id="dlg-detalle" class="hoja">
+    <div class="hoja-top">
+      <div class="hoja-asa" aria-hidden="true"></div>
+      <button class="btn-icono" type="button" data-cerrar aria-label="Cerrar">
+        <svg class="ic"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div id="det-contenido"></div>
+  </dialog>
+
+  <!-- ===================== FORMULARIO ===================== -->
+  <dialog id="dlg-form" class="hoja hoja-form">
+    <form id="form-cliente" autocomplete="off" novalidate>
+      <div class="hoja-cabeza">
+        <h2 id="form-titulo">Nuevo cliente</h2>
+        <button class="btn-icono" type="button" data-cerrar aria-label="Cerrar">
+          <svg class="ic"><use href="#i-x"/></svg>
+        </button>
+      </div>
+
+      <div class="hoja-cuerpo">
+        <fieldset>
+          <legend>Datos personales</legend>
+          <div class="campo">
+            <label for="f-nombre">Nombre completo</label>
+            <input id="f-nombre" name="nombre" class="mayus" placeholder="Ej: Olga María Santacruz">
+            <p class="error-campo" data-error="nombre"></p>
+          </div>
+          <div class="campo">
+            <label for="f-ocupacion">¿En qué trabaja?</label>
+            <input id="f-ocupacion" name="ocupacion" class="mayus" placeholder="Ej: Independiente">
+            <div class="sugerencias" id="sug-ocupacion"></div>
+            <p class="error-campo" data-error="ocupacion"></p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Contacto</legend>
+          <div class="campo">
+            <label for="f-telefono">Número de contacto</label>
+            <input id="f-telefono" name="telefono" type="tel" inputmode="numeric" maxlength="14" placeholder="300 123 4567">
+            <p class="error-campo" data-error="telefono"></p>
+          </div>
+          <label class="interruptor">
+            <input type="checkbox" id="f-mismo-wa">
+            <span class="interruptor-pista"></span>
+            Este número tiene WhatsApp
+          </label>
+          <div class="campo" id="campo-whatsapp">
+            <label for="f-whatsapp">WhatsApp <span class="opc">opcional</span></label>
+            <input id="f-whatsapp" name="whatsapp" type="tel" inputmode="numeric" maxlength="14" placeholder="300 123 4567">
+            <p class="error-campo" data-error="whatsapp"></p>
+          </div>
+          <div class="campo">
+            <label for="f-telefono2">Otro teléfono <span class="opc">opcional</span></label>
+            <input id="f-telefono2" name="telefono2" type="tel" inputmode="numeric" maxlength="14">
+            <p class="error-campo" data-error="telefono2"></p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Ubicación</legend>
+          <div class="campo">
+            <label for="f-direccion">Dirección</label>
+            <input id="f-direccion" name="direccion" class="mayus" placeholder="Ej: CLL 36 # 29-51">
+            <p class="error-campo" data-error="direccion"></p>
+          </div>
+          <div class="campo">
+            <label for="f-direccion2">Segunda dirección <span class="opc">opcional</span></label>
+            <input id="f-direccion2" name="direccion2" class="mayus" placeholder="Trabajo, familiar…">
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Cobro</legend>
+          <div class="campo campo-corto">
+            <label for="f-ruta">Ruta <span class="opc">opcional</span></label>
+            <input id="f-ruta" name="ruta" type="number" inputmode="numeric" min="0" placeholder="Ej: 30">
+            <p class="error-campo" data-error="ruta"></p>
+          </div>
+          <div class="campo">
+            <label for="f-obs">Observaciones <span class="opc">opcional</span></label>
+            <textarea id="f-obs" name="observaciones" rows="3" placeholder="Referencias, horarios de visita…"></textarea>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="hoja-pie">
+        <button class="btn btn-secundario" type="button" data-cerrar>Cancelar</button>
+        <button class="btn btn-primario" type="submit" id="btn-guardar">
+          <svg class="ic"><use href="#i-check"/></svg> Guardar
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===================== NUEVO CONTRATO ===================== -->
+  <dialog id="dlg-contrato" class="hoja hoja-form">
+    <form id="form-contrato" autocomplete="off" novalidate>
+      <div class="hoja-cabeza">
+        <div>
+          <h2>Nuevo contrato</h2>
+          <p class="sub" id="contrato-cliente"></p>
+        </div>
+        <button class="btn-icono" type="button" data-cerrar aria-label="Cerrar">
+          <svg class="ic"><use href="#i-x"/></svg>
+        </button>
+      </div>
+
+      <div class="hoja-cuerpo">
+        <fieldset>
+          <legend>Forma de pago</legend>
+          <div class="segmentos" role="radiogroup" aria-label="Forma de pago">
+            <label><input type="radio" name="forma_pago" value="D"><span>Diario</span></label>
+            <label><input type="radio" name="forma_pago" value="S"><span>Semanal</span></label>
+            <label><input type="radio" name="forma_pago" value="Q" checked><span>Quincenal</span></label>
+            <label><input type="radio" name="forma_pago" value="M"><span>Mensual</span></label>
+          </div>
+          <p class="ayuda" id="ayuda-forma"></p>
+          <p class="error-campo" data-error="forma_pago"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Valores</legend>
+          <div class="fila-2">
+            <div class="campo">
+              <label for="k-prestamo">Valor prestado</label>
+              <div class="dinero"><span>$</span><input id="k-prestamo" name="prestamo" inputmode="numeric" placeholder="800.000"></div>
+              <p class="error-campo" data-error="prestamo"></p>
+            </div>
+            <div class="campo">
+              <label for="k-interes">Interés total</label>
+              <div class="dinero dinero-der"><input id="k-interes" name="interes" type="number" inputmode="decimal" min="0" step="any" value="20"><span>%</span></div>
+            </div>
+          </div>
+          <div class="fila-2">
+            <div class="campo">
+              <label for="k-cuotas">N° de cuotas</label>
+              <input id="k-cuotas" name="num_cuotas" type="number" inputmode="numeric" min="1" max="400" placeholder="6">
+              <p class="error-campo" data-error="num_cuotas"></p>
+            </div>
+            <div class="campo">
+              <label for="k-valor-cuota">Valor de cuota</label>
+              <div class="dinero"><span>$</span><input id="k-valor-cuota" name="valor_cuota" inputmode="numeric" placeholder="Automático"></div>
+              <p class="error-campo" data-error="valor_cuota"></p>
+            </div>
+          </div>
+          <p class="ayuda">La cuota se calcula sola (redondeada al mil); puedes cambiarla a mano.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Fechas</legend>
+          <div class="fila-2">
+            <div class="campo">
+              <label for="k-inicio">Inicio</label>
+              <input id="k-inicio" name="fecha_inicio" type="date">
+              <p class="error-campo" data-error="fecha_inicio"></p>
+            </div>
+            <div class="campo">
+              <label for="k-primera">Primera cuota</label>
+              <input id="k-primera" name="fecha_primera_cuota" type="date">
+              <p class="error-campo" data-error="fecha_primera_cuota"></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="resumen-contrato" id="k-resumen"></div>
+
+        <div class="campo">
+          <label for="k-obs">Observaciones <span class="opc">opcional</span></label>
+          <textarea id="k-obs" name="observaciones" rows="2"></textarea>
+        </div>
+      </div>
+
+      <div class="hoja-pie">
+        <button class="btn btn-secundario" type="button" data-cerrar>Cancelar</button>
+        <button class="btn btn-primario" type="submit" id="btn-guardar-contrato">
+          <svg class="ic"><use href="#i-check"/></svg> Crear contrato
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===================== REGISTRO DE PAGO ===================== -->
+  <dialog id="dlg-pago" class="hoja hoja-form">
+    <form id="form-pago" autocomplete="off" novalidate>
+      <div class="hoja-cabeza">
+        <div>
+          <h2>Registrar pago</h2>
+          <p class="sub" id="pago-contrato"></p>
+        </div>
+        <button class="btn-icono" type="button" data-cerrar aria-label="Cerrar">
+          <svg class="ic"><use href="#i-x"/></svg>
+        </button>
+      </div>
+
+      <div class="hoja-cuerpo">
+        <div class="tabla-resumen" id="pago-antes"></div>
+
+        <div class="campo">
+          <label for="p-abono">Abono</label>
+          <div class="dinero dinero-grande"><span>$</span><input id="p-abono" name="abono" inputmode="numeric" placeholder="0"></div>
+          <div class="sugerencias" id="p-rapidos"></div>
+          <p class="error-campo" data-error="abono"></p>
+        </div>
+
+        <div class="fila-2">
+          <div class="campo">
+            <label for="p-mora">Interés de mora <span class="opc">opcional</span></label>
+            <div class="dinero"><span>$</span><input id="p-mora" name="int_mora" inputmode="numeric" placeholder="0"></div>
+            <p class="ayuda">Lo que cobras de mora en esta visita. Va aparte: no baja el saldo.</p>
+          </div>
+          <div class="campo">
+            <label for="p-fecha">Fecha</label>
+            <input id="p-fecha" name="fecha" type="date">
+            <p class="error-campo" data-error="fecha"></p>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="p-obs">Observación <span class="opc">opcional</span></label>
+          <input id="p-obs" name="observacion" placeholder="Ej: pagó en efectivo a la esposa">
+        </div>
+
+        <div class="tabla-resumen tabla-despues" id="pago-despues"></div>
+      </div>
+
+      <div class="hoja-pie">
+        <button class="btn btn-secundario" type="button" data-cerrar>Cancelar</button>
+        <button class="btn btn-primario" type="submit" id="btn-guardar-pago">
+          <svg class="ic"><use href="#i-check"/></svg> Guardar pago
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="aviso" class="aviso" role="status" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

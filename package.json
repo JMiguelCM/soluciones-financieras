@@ -1,0 +1,17 @@
+{
+  "name": "soluciones-financieras",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Control de créditos - Soluciones Financieras",
+  "scripts": {
+    "start": "node server.js",
+    "demo": "node demo.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
