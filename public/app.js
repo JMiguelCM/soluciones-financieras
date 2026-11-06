@@ -1294,8 +1294,14 @@ function filaPlanilla(f) {
   } else if (f.situacion === 'visitado') {
     segundo = `<button class="btn-no-pago" type="button" data-deshacer="${f.visita.id}">Deshacer</button>`;
   }
-  // Para cobrar se toca la fila: abre el contrato con "Registrar pago".
-  const acciones = segundo ? `<div class="acciones-fila">${segundo}</div>` : '';
+  // Cobrar y Refinanciar mientras el contrato tenga algo por cobrar (hoy o días futuros)
+  const pendiente = ['atrasado', 'pendiente', 'visitado'].includes(f.situacion);
+  const botones = [
+    pendiente ? `<button class="btn-cobrar" type="button" data-cobrar="${f.contrato_id}">${icono('cash')} Cobrar</button>` : '',
+    pendiente ? `<button class="btn-refi" type="button" data-refinanciar="${f.contrato_id}">${icono('refresh')} Refinanciar</button>` : '',
+    segundo,
+  ].filter(Boolean);
+  const acciones = botones.length ? `<div class="acciones-fila acciones-${botones.length}">${botones.join('')}</div>` : '';
 
   return `
     <li class="fila-planilla">
@@ -1361,6 +1367,7 @@ function pintarPlanilla() {
 
 $('#planilla-lista').addEventListener('click', async (e) => {
   const cobrar = e.target.closest('[data-cobrar]');
+  const refinanciar = e.target.closest('[data-refinanciar]');
   const noPago = e.target.closest('[data-no-pago]');
   const deshacer = e.target.closest('[data-deshacer]');
   const abrir = e.target.closest('[data-contrato]');
@@ -1377,6 +1384,11 @@ $('#planilla-lista').addEventListener('click', async (e) => {
       contratoAbierto = k;
       pintarContrato(k); // deja lista la ficha del contrato para cuando se guarde el pago
       abrirPago(k);
+    } else if (refinanciar) {
+      const k = await api('GET', `/api/contratos/${refinanciar.dataset.refinanciar}`);
+      contratoAbierto = k;
+      pintarContrato(k);
+      abrirRefinanciar(k);
     } else if (abrir) {
       await abrirContrato(Number(abrir.dataset.contrato));
     }
