@@ -234,6 +234,17 @@ input:focus, textarea:focus {
 
 .buscador { position: relative; margin-bottom: 16px; }
 
+/* Banda del modo demo */
+.banda-demo {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px 12px;
+  padding: 8px 16px; font-size: .82rem; text-align: center;
+  background: var(--aviso-suave); color: var(--aviso-c); border-bottom: 1px solid color-mix(in srgb, var(--aviso-c) 25%, transparent);
+}
+.banda-demo button {
+  border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 999px;
+  padding: 3px 10px; font-size: .78rem; font-weight: 600; cursor: pointer;
+}
+
 /* Navegación */
 .pestanas { display: flex; gap: 2px; padding: 3px; margin-left: 12px; border-radius: 10px; background: var(--superficie-2); border: 1px solid var(--borde); }
 .pestanas button { border: 0; background: transparent; padding: 6px 14px; border-radius: 7px; font-size: .9rem; font-weight: 600; color: var(--texto-2); cursor: pointer; }

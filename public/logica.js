@@ -1,0 +1,199 @@
+// Reglas de negocio compartidas por el servidor (SQLite) y el modo demo del navegador.
+import { estadoContrato, FORMAS_PAGO, hoyLocal } from './calculos.js';
+
+// ---------- utilidades ----------
+// Map.groupBy no existe en navegadores de celular algo viejos
+export function agrupar(lista, clave) {
+  const m = new Map();
+  for (const x of lista) {
+    const k = clave(x);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(x);
+  }
+  return m;
+}
+
+export const texto = (v) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : '');
+export const mayus = (v) => texto(v).toUpperCase();
+const soloDigitos = (v) => texto(String(v ?? '')).replace(/\D/g, '');
+export const entero = (v) => {
+  const n = Number(String(v ?? '').replace(/\D/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};
+const esFecha = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
+// Colombia: celular de 10 dígitos o fijo de 7
+const telefonoValido = (t) => t.length === 10 || t.length === 7;
+
+export function ahoraLocal() {
+  const f = new Date();
+  const d = (n) => String(n).padStart(2, '0');
+  return `${hoyLocal()} ${d(f.getHours())}:${d(f.getMinutes())}:${d(f.getSeconds())}`;
+}
+
+export const ERROR_CAMPOS = 'Revise los campos marcados.';
+
+// ---------- usuarios ----------
+export function leerUsuario(body) {
+  const nombre = mayus(body?.nombre);
+  if (!nombre) return { error: 'Escriba el nombre del usuario.' };
+  if (nombre.length > 40) return { error: 'El nombre no puede pasar de 40 caracteres.' };
+  return { nombre };
+}
+
+// ---------- clientes ----------
+export function leerCliente(body) {
+  const c = {
+    nombre: mayus(body.nombre),
+    direccion: mayus(body.direccion),
+    direccion2: mayus(body.direccion2) || null,
+    ocupacion: mayus(body.ocupacion),
+    telefono: soloDigitos(body.telefono),
+    telefono2: soloDigitos(body.telefono2) || null,
+    whatsapp: soloDigitos(body.whatsapp) || null,
+    ruta: body.ruta === '' || body.ruta == null ? null : Number(body.ruta),
+    observaciones: texto(body.observaciones) || null,
+  };
+
+  const errores = {};
+  if (!c.nombre) errores.nombre = 'Escriba el nombre.';
+  if (!c.direccion) errores.direccion = 'Escriba la dirección.';
+  if (!c.ocupacion) errores.ocupacion = 'Indique en qué trabaja.';
+  if (!c.telefono) errores.telefono = 'Escriba un número de contacto.';
+  else if (!telefonoValido(c.telefono)) errores.telefono = 'Debe tener 10 dígitos (celular) o 7 (fijo).';
+  if (c.telefono2 && !telefonoValido(c.telefono2)) errores.telefono2 = 'Debe tener 10 o 7 dígitos.';
+  if (c.whatsapp && c.whatsapp.length !== 10) errores.whatsapp = 'Debe tener 10 dígitos.';
+  if (c.ruta !== null && (!Number.isInteger(c.ruta) || c.ruta < 0)) errores.ruta = 'Debe ser un número entero.';
+
+  return { c, errores };
+}
+
+// ---------- contratos ----------
+export function leerContrato(body, clienteExiste) {
+  const k = {
+    cliente_id: Number(body.cliente_id),
+    fecha_inicio: body.fecha_inicio,
+    fecha_primera_cuota: body.fecha_primera_cuota,
+    forma_pago: body.forma_pago,
+    prestamo: entero(body.prestamo),
+    num_cuotas: entero(body.num_cuotas),
+    valor_cuota: entero(body.valor_cuota),
+    observaciones: texto(body.observaciones) || null,
+  };
+
+  const errores = {};
+  if (!clienteExiste(k.cliente_id)) errores.cliente_id = 'Cliente no encontrado.';
+  if (!esFecha(k.fecha_inicio)) errores.fecha_inicio = 'Fecha no válida.';
+  if (!esFecha(k.fecha_primera_cuota)) errores.fecha_primera_cuota = 'Fecha no válida.';
+  else if (esFecha(k.fecha_inicio) && k.fecha_primera_cuota < k.fecha_inicio) errores.fecha_primera_cuota = 'No puede ser antes del inicio.';
+  if (!FORMAS_PAGO[k.forma_pago]) errores.forma_pago = 'Escoja la forma de pago.';
+  if (k.prestamo <= 0) errores.prestamo = 'Escriba el valor prestado.';
+  if (k.num_cuotas <= 0) errores.num_cuotas = 'Mínimo 1 cuota.';
+  else if (k.num_cuotas > 400) errores.num_cuotas = 'Máximo 400 cuotas.';
+  if (k.valor_cuota <= 0) errores.valor_cuota = 'Escriba el valor de la cuota.';
+
+  if (!Object.keys(errores).length) {
+    k.credito = k.valor_cuota * k.num_cuotas;
+    k.interes = Math.round(((k.credito / k.prestamo) - 1) * 10000) / 100;
+    if (k.credito < k.prestamo) errores.valor_cuota = 'El total de cuotas no cubre lo prestado.';
+  }
+  return { k, errores };
+}
+
+// ---------- pagos ----------
+/** `contrato` debe traer `estado` (resultado de estadoContrato). */
+export function leerPago(body, contrato) {
+  const p = {
+    fecha: body.fecha,
+    abono: entero(body.abono),
+    int_mora: entero(body.int_mora),
+    observacion: texto(body.observacion) || null,
+  };
+  const errores = {};
+  if (!esFecha(p.fecha)) errores.fecha = 'Fecha no válida.';
+  else if (p.fecha < contrato.fecha_inicio) errores.fecha = 'No puede ser antes del inicio del contrato.';
+  if (p.abono <= 0 && p.int_mora <= 0) errores.abono = 'Escriba el valor del abono.';
+  if (p.abono > contrato.estado.saldo) errores.abono = `El saldo es $${contrato.estado.saldo.toLocaleString('es-CO')}; el abono no puede ser mayor.`;
+  return { p, errores };
+}
+
+// ---------- resumen por cliente (lista de clientes) ----------
+export const RESUMEN_VACIO = {
+  contratos_activos: 0, saldo: 0, atrasado: false, dias_atraso: 0, cuota_hoy: 0, valor_atrasos: 0, por_cobrar_hoy: 0,
+};
+
+/** `pagos`: solo los no anulados. */
+export function resumenPorCliente(contratos, pagos) {
+  const pagosPorContrato = agrupar(pagos, (p) => p.contrato_id);
+  const resumen = new Map();
+  for (const k of contratos) {
+    const e = estadoContrato(k, pagosPorContrato.get(k.id) ?? []);
+    const r = resumen.get(k.cliente_id) ?? { ...RESUMEN_VACIO };
+    if (e.estado !== 'pagado') {
+      r.contratos_activos += 1;
+      r.saldo += e.saldo;
+      // lo que vence hoy y aún no se ha pagado
+      r.cuota_hoy += e.plan.filter((c) => c.estado === 'hoy').reduce((s, c) => s + (c.valor - c.pagado), 0);
+      r.valor_atrasos += e.valorAtrasos;
+      r.por_cobrar_hoy = r.cuota_hoy + r.valor_atrasos;
+    }
+    if (e.estado === 'atrasado') {
+      r.atrasado = true;
+      r.dias_atraso = Math.max(r.dias_atraso, e.diasAtraso);
+    }
+    resumen.set(k.cliente_id, r);
+  }
+  return resumen;
+}
+
+// ---------- totales (como el pie del listado impreso) ----------
+const TOTALES_VACIO = () => ({
+  registros: 0, prestamos: 0, creditos: 0, cuotas_dia: 0, cuotas: 0,
+  atrasos_dia: 0, atrasos: 0, saldo_creditos: 0, saldo_mora: 0, total_saldos: 0,
+});
+
+/** `contratos` con la ruta del cliente en `ruta`; `pagos` solo los no anulados. */
+export function calcularTotales(contratos, pagos, ruta = '') {
+  const hoy = hoyLocal();
+  const porContrato = agrupar(pagos, (p) => p.contrato_id);
+  const nuevos = TOTALES_VACIO();
+  const total = TOTALES_VACIO();
+  const porRuta = new Map();
+
+  for (const k of contratos) {
+    if (ruta && (ruta === 'sin' ? k.ruta != null : String(k.ruta) !== ruta)) continue;
+    const e = estadoContrato(k, porContrato.get(k.id) ?? []);
+    if (e.estado === 'pagado') continue;
+
+    const deHoy = e.plan.filter((c) => c.estado === 'hoy');
+    const fila = {
+      registros: 1,
+      prestamos: k.prestamo,
+      creditos: k.credito,
+      cuotas_dia: deHoy.reduce((s, c) => s + c.valor, 0),
+      cuotas: k.valor_cuota,
+      atrasos_dia: e.valorAtrasos,
+      atrasos: e.valorAtrasos + deHoy.reduce((s, c) => s + (c.valor - c.pagado), 0),
+      saldo_creditos: e.saldo,
+      saldo_mora: 0, // la mora se cobra a mano en cada pago; no queda saldo pendiente
+      total_saldos: e.saldo,
+    };
+    const claveRuta = k.ruta == null ? 'sin' : String(k.ruta);
+    if (!porRuta.has(claveRuta)) porRuta.set(claveRuta, { ruta: k.ruta, ...TOTALES_VACIO() });
+    const destinos = [total, porRuta.get(claveRuta)];
+    if (k.fecha_inicio === hoy) destinos.push(nuevos); // préstamos hechos hoy
+    for (const d of destinos) for (const [campo, v] of Object.entries(fila)) d[campo] += v;
+  }
+
+  return {
+    fecha: new Date().toISOString(),
+    nuevos,
+    total,
+    porRuta: [...porRuta.values()].sort((a, b) => (a.ruta ?? 1e9) - (b.ruta ?? 1e9)),
+  };
+}
+
+/** Contrato con su estado y la lista de pagos ordenada (más reciente primero). */
+export function armarContrato(k, pagos) {
+  const ordenados = [...pagos].sort((a, b) => (a.fecha === b.fecha ? b.id - a.id : a.fecha < b.fecha ? 1 : -1));
+  return { ...k, pagos: ordenados, estado: estadoContrato(k, ordenados) };
+}

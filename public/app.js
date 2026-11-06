@@ -113,7 +113,16 @@ const ESTADOS = {
   pagado: { texto: 'Pagado', clase: 'gris' },
 };
 
+// En GitHub Pages no hay servidor: la app usa una API simulada dentro del navegador.
+// También se puede forzar con ?demo en la dirección.
+const MODO_DEMO = location.hostname.endsWith('github.io') || new URLSearchParams(location.search).has('demo');
+let moduloLocal = null;
+
 async function api(metodo, ruta, cuerpo) {
+  if (MODO_DEMO) {
+    moduloLocal ??= await import('./api-local.js');
+    return moduloLocal.apiLocal(metodo, ruta, cuerpo, usuario?.id);
+  }
   const r = await fetch(ruta, {
     method: metodo,
     headers: {
@@ -1087,6 +1096,17 @@ $('#totales-contenido').addEventListener('click', (e) => {
   pintarLista();
   cargarTotales();
 });
+
+// ================= modo demo =================
+if (MODO_DEMO) {
+  $('#banda-demo').hidden = false;
+  $('#btn-reiniciar-demo').addEventListener('click', async () => {
+    if (!confirm('¿Borrar los cambios que hiciste y volver a los datos de prueba originales?')) return;
+    moduloLocal ??= await import('./api-local.js');
+    moduloLocal.reiniciarDemo();
+    location.reload();
+  });
+}
 
 // ================= inicio =================
 (async function iniciar() {
