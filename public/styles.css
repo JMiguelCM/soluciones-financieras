@@ -744,3 +744,10 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 /* Safari: lo que va después del título flotante de un fieldset debe bajar debajo de él */
 fieldset > .tabla-resumen, fieldset > .segmentos, fieldset > .fila-2 { clear: both; }
+
+/* Aviso cuando la app no logra arrancar */
+.fallo-carga { position: fixed; inset: 0; z-index: 200; display: grid; place-content: center; gap: 10px; padding: 24px; text-align: center; background: var(--fondo); }
+.fallo-carga[hidden] { display: none; }
+.fallo-carga h2 { font-size: 1.3rem; }
+.fallo-carga p { color: var(--texto-2); max-width: 320px; margin: 0 auto; }
+.fallo-carga .btn { justify-self: center; margin-top: 8px; min-width: 160px; }

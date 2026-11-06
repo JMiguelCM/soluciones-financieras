@@ -536,6 +536,37 @@
 
   <div id="aviso" class="aviso" role="status" hidden></div>
 
+  <!-- Si la app no logra arrancar (archivos a medio actualizar, sin conexión…), mejor un aviso que una pantalla vacía -->
+  <div id="fallo-carga" class="fallo-carga" hidden>
+    <div class="logo-grande" aria-hidden="true">SF</div>
+    <h2>La app no cargó bien</h2>
+    <p>Puede pasar justo después de una actualización. Recarga la página.</p>
+    <p class="sub" id="fallo-detalle"></p>
+    <button class="btn btn-primario" type="button" id="btn-recargar">Recargar</button>
+  </div>
+  <script>
+    (function () {
+      function mostrar(detalle) {
+        var caja = document.getElementById('fallo-carga');
+        if (!caja || !caja.hidden) return;
+        document.getElementById('fallo-detalle').textContent = detalle || '';
+        caja.hidden = false;
+      }
+      window.mostrarFalloCarga = mostrar;
+      document.getElementById('btn-recargar').onclick = function () {
+        // vuelve a pedir la página saltándose la copia guardada
+        location.replace(location.pathname + '?r=' + Date.now() + location.hash);
+      };
+      window.addEventListener('error', function (e) {
+        if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) mostrar('No se pudo descargar un archivo.');
+      }, true);
+      setTimeout(function () {
+        var ingreso = document.getElementById('vista-ingreso');
+        var app = document.getElementById('vista-app');
+        if (ingreso && app && ingreso.hidden && app.hidden) mostrar();
+      }, 6000);
+    })();
+  </script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -216,7 +216,7 @@ function entrar(u) {
   $('#vista-ingreso').hidden = true;
   $('#vista-app').hidden = false;
   $('#buscar').value = '';
-  cargarClientes();
+  return cargarClientes();
 }
 
 $('#btn-salir').addEventListener('click', () => {
@@ -1576,12 +1576,17 @@ prepararMenu('btn-filtros-planilla', 'planilla-filtros', () => vistaPlanilla ===
 
 // ================= inicio =================
 (async function iniciar() {
-  const guardado = leerSesion();
-  if (guardado) {
-    const lista = await api('GET', '/api/usuarios');
-    const u = lista.find((x) => x.id === guardado.id);
-    if (u) return entrar(u);
-    guardarSesion(null);
+  try {
+    const guardado = leerSesion();
+    if (guardado) {
+      const lista = await api('GET', '/api/usuarios');
+      const u = lista.find((x) => x.id === guardado.id);
+      if (u) return await entrar(u);
+      guardarSesion(null);
+    }
+    await mostrarIngreso();
+  } catch (ex) {
+    console.error('No se pudo iniciar la app', ex);
+    window.mostrarFalloCarga?.(ex.message);
   }
-  mostrarIngreso();
 })();
