@@ -772,3 +772,185 @@ fieldset > .tabla-resumen, fieldset > .segmentos, fieldset > .fila-2 { clear: bo
 #pagina-planilla .titulo-pagina .selector-ruta { width: 100%; }
 #pagina-planilla .titulo-pagina .selector-ruta select { max-width: none; width: 100%; }
 #pagina-planilla .titulo-pagina .btn-menu { align-self: stretch; height: auto; min-height: 50px; }
+
+/* =====================================================================
+   TEMA "COMO EL SISTEMA": colores, letra y ventanas del sistema de cobros
+   que ya usan (botones azul / verde / naranja / rojo / celeste, cuadrito
+   celeste en las listas, ventanas centradas tipo tabla).
+   ===================================================================== */
+:root {
+  --primario: #2a6fdb;          /* azul de "Pago de cuota" / "Guardar" */
+  --primario-hover: #1f5fc4;
+  --primario-suave: #e8f0fc;
+  --verde: #4cae4c;              /* Refinanciado */
+  --naranja: #f0a033;            /* Visitar nuevamente */
+  --rojo: #d9534f;               /* No pagó */
+  --celeste: #3bb3e0;            /* Info. contrato */
+  --cuadro: #2ec4d6;             /* cuadrito de las listas */
+  --peligro: #d9534f;
+  --peligro-suave: #f9e1e0;
+  --ok: #3c8d3c;
+  --ok-suave: #dff0d8;
+  --aviso-c: #8a6d3b;
+  --aviso-suave: #fcf8e3;
+  --fondo: #ffffff;
+  --superficie: #ffffff;
+  --superficie-2: #f5f5f5;
+  --borde: #dddddd;
+  --borde-fuerte: #cccccc;
+  --texto: #333333;
+  --texto-2: #555555;
+  --tenue: #777777;
+  --radio: 4px;
+  --radio-sm: 4px;
+  --sombra-1: none;
+  --sombra-2: 0 5px 15px rgba(0, 0, 0, .5);
+}
+
+body { font-family: Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 16px; color: var(--texto); background: #fff; }
+h1, h2, h3 { font-weight: 400; }
+.titulo-pagina h1 { font-weight: 400; letter-spacing: 0; }
+
+/* Botones planos como Bootstrap */
+.btn { border-radius: 4px; font-weight: 400; min-height: 42px; padding: 0 14px; box-shadow: none; }
+.btn-primario { background: var(--primario); border-color: #2563c4; color: #fff; }
+.btn-primario:hover { background: var(--primario-hover); }
+.btn-secundario { background: #fff; border-color: #ccc; color: #333; }
+.btn-secundario:hover { background: #e6e6e6; }
+.btn-peligro { background: var(--rojo); border-color: #d43f3a; color: #fff; }
+.btn-color { color: #fff; border: 1px solid transparent; justify-content: center; gap: 8px; }
+.btn-color .ic { color: #fff; }
+.btn-azul-sf { background: var(--primario); border-color: #2563c4; }
+.btn-verde-sf { background: var(--verde); border-color: #4cae4c; }
+.btn-naranja-sf { background: var(--naranja); border-color: #eea236; }
+.btn-rojo-sf { background: var(--rojo); border-color: #d43f3a; }
+.btn-celeste-sf { background: var(--celeste); border-color: #2aa3d0; }
+.btn-color:hover { filter: brightness(.94); }
+
+/* Campos */
+input, textarea, select { border-radius: 4px; border-color: #ccc; box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075); }
+input:focus, textarea:focus { border-color: #66afe9; box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 8px rgba(102, 175, 233, .6); }
+.campo label { font-weight: 700; color: #333; }
+
+/* Barra superior tipo navbar */
+.topbar { background: #f8f8f8; border-bottom: 1px solid #e7e7e7; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.logo { border-radius: 4px; background: var(--primario); }
+.logo-grande { border-radius: 8px; background: var(--primario); box-shadow: none; }
+.pestanas { background: transparent; border: 0; padding: 0; gap: 4px; }
+.pestanas button { border-radius: 4px; color: var(--primario); }
+.pestanas button[aria-current="page"] { background: var(--primario); color: #fff; box-shadow: none; }
+
+/* Ingreso */
+.ingreso { background: #fff; }
+.panel { border-radius: 4px; box-shadow: none; }
+.usuario-btn { border-radius: 4px; background: #fff; font-weight: 400; text-transform: uppercase; }
+.usuario-btn:hover { background: #f5f5f5; border-color: #adadad; }
+
+/* Listas tipo "list-group" con el cuadrito celeste */
+.clientes { border: 0; border-radius: 0; background: transparent; box-shadow: none; display: grid; gap: 4px; }
+.clientes li + li { border-top: 0; }
+.cliente { border: 1px solid #ddd; border-radius: 4px; background: #fff; padding: 10px 12px; gap: 10px; align-items: center; }
+.cliente:hover { background: #f5f5f5; }
+.cuadro-sf { width: 22px; height: 22px; flex: none; background: var(--cuadro); border-radius: 2px; align-self: center; }
+.forma-sf { font-weight: 400; margin-right: 6px; white-space: nowrap; }
+.cliente-nombre { font-weight: 400; font-size: 1.02rem; text-transform: uppercase; }
+.cliente > .ic { color: #bbb; }
+.fila-planilla { border: 1px solid #ddd; border-radius: 4px; background: #fff; }
+.planilla .fila-planilla .cliente { border: 0; }
+.clientes.planilla { gap: 6px; }
+
+/* Cobro del día: cuadrito y borde azul */
+.cliente.cobra-hoy, .fila-planilla.cobra-hoy { background: #e8f0fc; border-color: #9fc0f0; box-shadow: none; }
+.cliente.cobra-hoy .cuadro-sf, .fila-planilla.cobra-hoy .cuadro-sf { background: var(--primario); }
+
+/* Etiquetas tipo "badge" */
+.etiqueta { border-radius: 10px; font-weight: 700; }
+.chip-sf { display: inline-block; padding: 3px 10px; border-radius: 10px; background: #555; color: #fff; font-size: .82rem; font-weight: 700; }
+
+/* Filtros (☰) tipo botones de Bootstrap */
+.filtros button { border-radius: 4px; background: #fff; border-color: #ccc; font-weight: 400; }
+.filtros button[aria-selected="true"] { background: var(--primario); border-color: var(--primario); color: #fff; }
+.btn-menu { border-radius: 4px; box-shadow: none; border-color: #ccc; }
+.btn-menu[aria-expanded="true"] { background: #e6e6e6; color: #333; border-color: #adadad; }
+.selector-ruta { border-radius: 4px; box-shadow: none; border-color: #ccc; }
+.buscador input { border-radius: 4px; box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075); border-color: #ccc; }
+.total-filtro, .kpi, .kpi-principal, .tarjeta-tabla, .vacio { border-radius: 4px; box-shadow: none; }
+.kpi-principal { background: var(--primario); }
+.fab { border-radius: 50%; background: var(--primario); }
+.dias button { border-radius: 4px; }
+.dias button[aria-selected="true"] { background: var(--primario); border-color: var(--primario); }
+
+/* ---------- Ventanas centradas como las del sistema ---------- */
+.hoja { border-radius: 6px; border: 1px solid rgba(0, 0, 0, .2); box-shadow: 0 5px 15px rgba(0, 0, 0, .5); }
+.hoja::backdrop { background: rgba(0, 0, 0, .5); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.hoja-cabeza { padding: 15px 15px 12px 18px; border-bottom: 1px solid #e5e5e5; }
+.hoja-cabeza h2 { font-size: 1.45rem; font-weight: 400; color: #333; }
+.hoja-cabeza .sub { color: #777; }
+.hoja-cabeza .btn-icono, .hoja-top .btn-icono { color: #999; }
+.hoja-pie { border-top: 1px solid #e5e5e5; padding: 15px; }
+.hoja-asa { display: none !important; }
+@media (max-width: 640px) {
+  .hoja {
+    width: calc(100% - 24px); max-width: 600px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
+    margin: auto; border-radius: 6px; border-bottom: 1px solid rgba(0, 0, 0, .2);
+  }
+  .hoja[open] { animation: aparecer .18s ease-out; }
+  .hoja-pie { justify-content: flex-end; }
+  .hoja-pie .btn { flex: initial; }
+  .pie-recibo .btn { flex: 1; }
+}
+
+/* Recuadros del registro de pago: beige arriba, verde abajo */
+.tabla-resumen { background: #fcf8e3; border: 1px solid #faebcc; border-radius: 4px; }
+.tabla-resumen .peligro dt, .tabla-resumen .peligro dd { color: #d9534f; }
+.tabla-despues { background: #dff0d8; border: 1px solid #d6e9c6; }
+.tabla-titulo { color: #3c763d; }
+.dinero > span {
+  left: 1px; top: 1px; bottom: 1px; width: 40px; display: grid; place-items: center;
+  background: #dff0d8; border-right: 1px solid #b2dba1; border-radius: 3px 0 0 3px; color: #3c763d;
+}
+.dinero input { padding-left: 52px; }
+.dinero-grande > span { width: 46px; }
+.dinero-grande input { padding-left: 58px; }
+.dinero-der > span { left: auto; right: 1px; border-right: 0; border-left: 1px solid #b2dba1; border-radius: 0 3px 3px 0; }
+.dinero-der input { padding-left: 12px; padding-right: 52px; }
+
+/* ---------- Ficha del contrato (como "Contrato: 00013338") ---------- */
+.contrato-cabeza h2 { font-weight: 400; font-size: 1.45rem; }
+.ficha-sf { margin: 0 18px 14px; display: grid; gap: 2px; font-size: .98rem; text-transform: uppercase; color: #333; }
+.ficha-sf .obs-sf { text-transform: none; }
+.ficha-sf .obs-sf mark { background: #f3f37a; padding: 0 4px; text-transform: uppercase; }
+.ficha-sf .chips-sf { display: flex; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
+.ficha-sf .tel-sf { color: #2a6fdb; text-transform: none; }
+.ficha-sf .tel-sf.vacio-sf { color: #2a6fdb; opacity: .7; }
+.ficha-sf .pc-sf { text-transform: none; }
+.botones-sf { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 18px 16px; }
+.botones-sf .btn { min-height: 46px; font-size: 1rem; }
+.saldo-grande { border-radius: 4px; background: #f5f5f5; }
+
+/* "Información del contrato" en filas grises con la etiqueta a la derecha */
+.info { grid-template-columns: 1fr; gap: 0; background: #fff; }
+.info-fila {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 3px 8px;
+  background: #e9ecef; border-bottom: 2px solid #fff; font-size: .98rem;
+}
+.info dt { text-align: right; font-weight: 700; color: #333; }
+.info dd { text-align: left; font-weight: 400; color: #333; }
+.info-fila.peligro dt, .info-fila.peligro dd { color: #d9534f; }
+.seccion-cabeza h3, .plegable summary h3 { color: #333; font-size: .95rem; letter-spacing: 0; text-transform: none; font-weight: 700; }
+.mora-caja, .contrato, .enlace-refi, .alerta, .resumen-contrato, .vacio-chico { border-radius: 4px; }
+.btn-chico { border-radius: 4px; font-weight: 400; }
+.segmentos, .segmentos span { border-radius: 4px; }
+.segmentos input:checked + span { background: var(--primario); color: #fff; }
+.motivos span { border-radius: 4px; font-weight: 400; }
+.btn-cobrar { background: var(--primario); color: #fff; border-color: #2563c4; border-radius: 4px; font-weight: 400; }
+.btn-refi { background: var(--verde); color: #fff; border-color: #4cae4c; border-radius: 4px; font-weight: 400; }
+.btn-refi .ic { color: #fff; }
+.btn-no-pago { background: var(--rojo); color: #fff; border-color: #d43f3a; border-radius: 4px; font-weight: 400; }
+.acciones-fila { margin: 0 12px 12px; }
+.recibo-ok { border-radius: 4px; }
+.aviso { border-radius: 4px; }
+.botones-sf { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.botones-sf .btn { white-space: normal; line-height: 1.15; padding: 6px 8px; text-align: center; }
+.hoja [data-cerrar]:focus:not(:focus-visible), .hoja .btn-icono:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+.hoja-top .btn-icono:focus { outline: none; box-shadow: none; }

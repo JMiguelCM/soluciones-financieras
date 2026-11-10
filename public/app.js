@@ -62,8 +62,16 @@ async function copiar(texto) {
   }
 }
 
-const bonito = (s) => String(s ?? '').toLowerCase();
-const capital = (s) => bonito(s).replace(/(^|\s)(\S)/g, (_, a, b) => a + b.toUpperCase());
+const bonito = (s) => String(s ?? '').toUpperCase();
+const capital = bonito;
+
+// "Q (VI)", "S (MI)", "D": forma de pago y día de la semana en que se cobra
+const DIAS_SF = ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA'];
+function etiquetaForma(forma, fechaPrimera) {
+  if (!forma) return '';
+  if (forma === 'D' || !fechaPrimera) return forma;
+  return `${forma} (${DIAS_SF[new Date(`${fechaPrimera}T00:00:00Z`).getUTCDay()]})`;
+}
 
 // ---------- dinero y fechas ----------
 const pesos = (n) => `$${Math.round(n || 0).toLocaleString('es-CO')}`;
@@ -345,9 +353,9 @@ function pintarLista() {
 
   $('#lista-clientes').innerHTML = visibles.map((c) => `
     <li><button class="cliente ${c.por_cobrar_hoy > 0 ? 'cobra-hoy' : ''}" type="button" data-id="${c.id}" ${c.contrato ? `data-contrato-fila="${c.contrato.id}"` : ''}>
-      ${avatar(c.nombre)}
+      <span class="cuadro-sf" aria-hidden="true"></span>
       <span class="cliente-info">
-        <span class="cliente-nombre" style="display:block;text-transform:capitalize">${resaltar(c.nombre, q)}</span>
+        <span class="cliente-nombre" style="display:block">${c.contrato ? `<span class="forma-sf">${etiquetaForma(c.contrato.forma_pago, c.contrato.fecha_primera_cuota)}</span>` : ''}${resaltar(c.nombre, q)}</span>
         <span class="cliente-sub">
           <span class="tel">${esc(formatoTel(c.telefono))}</span>
           ${c.ruta != null ? `<span class="tel ruta">Ruta ${esc(c.ruta)}</span>` : ''}
@@ -590,9 +598,33 @@ function pintarContrato(k) {
     <div class="contrato-cabeza">
       <button class="btn-icono" type="button" id="k-volver" aria-label="Volver al cliente">${icono('back')}</button>
       <div>
-        <h2>Contrato ${idCorto(k.id)}</h2>
-        <p class="sub" style="text-transform:capitalize">${esc(bonito(k.cliente_nombre))}</p>
+        <h2>Contrato: ${idCorto(k.id)}</h2>
       </div>
+    </div>
+
+    <div class="ficha-sf">
+      <div class="obs-sf">Obs:${k.cliente_observaciones ? ` <mark>${esc(k.cliente_observaciones)}</mark>` : ''}</div>
+      <div class="chips-sf">
+        ${k.cliente_ruta != null ? `<span class="chip-sf">RUT: ${esc(k.cliente_ruta)}</span>` : ''}
+        <span class="chip-sf">${etiquetaForma(k.forma_pago, k.fecha_primera_cuota)}</span>
+        <span class="etiqueta etiqueta-${est.clase}">${est.texto}</span>
+      </div>
+      <div>${esc(bonito(k.cliente_nombre))}</div>
+      <div>${esc(bonito(k.cliente_direccion ?? ''))}</div>
+      <div>${k.cliente_direccion2 ? esc(bonito(k.cliente_direccion2)) : 'NO REPORTA 2DA DIRECCIÓN'}</div>
+      <div>${esc(bonito(k.cliente_ocupacion ?? ''))}</div>
+      ${[k.cliente_telefono, k.cliente_telefono2].map((t) => `<div class="tel-sf ${t ? '' : 'vacio-sf'}">${icono('phone')} [CO] [+57 ${t ? esc(t) : ''}]</div>`).join('')}
+      <div class="tel-sf ${k.cliente_whatsapp ? '' : 'vacio-sf'}">${icono('chat')} [CO] [+57 ${k.cliente_whatsapp ? esc(k.cliente_whatsapp) : ''}]</div>
+      <div class="pc-sf">P: ${pesos(k.prestamo)} - C: ${pesos(k.credito)}</div>
+    </div>
+
+    <div class="botones-sf">
+      ${puedePagar ? `<button class="btn btn-color btn-azul-sf" type="button" id="k-pagar">${icono('cash')} Pago de cuota</button>` : ''}
+      ${!cerrado ? `<button class="btn btn-color btn-verde-sf" type="button" id="k-refinanciar">${icono('refresh')} Refinanciar</button>` : ''}
+      ${!cerrado ? `<button class="btn btn-color btn-naranja-sf" type="button" id="k-visitar">${icono('arrow')} Visitar nuevamente</button>` : ''}
+      ${!cerrado ? `<button class="btn btn-color btn-rojo-sf" type="button" id="k-no-pago">${icono('x')} No pagó</button>` : ''}
+      <button class="btn btn-color btn-celeste-sf" type="button" id="k-info">${icono('file')} Info. contrato</button>
+      ${e.estado !== 'refinanciado' ? `<button class="btn btn-color btn-celeste-sf" type="button" id="k-mora-boton">${icono('alert')} Int. de mora</button>` : ''}
     </div>
 
     ${k.refinanciado_por_id ? `
@@ -627,13 +659,8 @@ function pintarContrato(k) {
         <div>Debe ponerse al día con ${pesos(e.valorAtrasos)}</div></div>
       </div>` : ''}
 
-    ${puedePagar || !cerrado ? `
-      <div class="ficha-acciones acciones-contrato">
-        ${puedePagar ? `<button class="btn btn-primario btn-ancho" type="button" id="k-pagar">${icono('cash')} Registrar pago</button>` : ''}
-        ${!cerrado ? `<button class="btn btn-secundario btn-ancho" type="button" id="k-refinanciar">${icono('refresh')} Refinanciar</button>` : ''}
-      </div>` : ''}
 
-    <section class="seccion">
+    <section class="seccion" id="seccion-info">
       <div class="seccion-cabeza"><h3>Información del contrato</h3></div>
       <dl class="info">
         ${filaInfo('Inicio', fechaCorta(k.fecha_inicio))}
@@ -664,7 +691,7 @@ function pintarContrato(k) {
       ${k.observaciones ? `<p class="nota">${esc(k.observaciones)}</p>` : ''}
     </section>
 
-    <section class="seccion">
+    <section class="seccion" id="seccion-mora">
       <div class="seccion-cabeza">
         <h3>Intereses de mora</h3>
         ${e.estado !== 'refinanciado' ? `<button class="btn-chico" type="button" id="k-mora">${icono('plus')} Aplicar mora</button>` : ''}
@@ -707,6 +734,16 @@ function pintarContrato(k) {
   });
   $('#k-pagar')?.addEventListener('click', () => abrirPago(contratoAbierto));
   $('#k-refinanciar')?.addEventListener('click', () => abrirRefinanciar(contratoAbierto));
+  const desdeContrato = (motivo) => abrirNoPago({
+    contrato_id: k.id,
+    cliente_nombre: k.cliente_nombre,
+    a_cobrar: e.valorAtrasos + (e.plan ?? []).filter((c) => c.estado === 'hoy').reduce((t, c) => t + c.valor - c.pagado, 0),
+    dias_atraso: e.diasAtraso,
+  }, hoyLocal(), motivo);
+  $('#k-visitar')?.addEventListener('click', () => desdeContrato('Visitar nuevamente'));
+  $('#k-no-pago')?.addEventListener('click', () => desdeContrato(null));
+  $('#k-info')?.addEventListener('click', () => $('#seccion-info').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  $('#k-mora-boton')?.addEventListener('click', () => $('#seccion-mora').scrollIntoView({ behavior: 'smooth', block: 'start' }));
   $('#k-mora')?.addEventListener('click', () => abrirMora(contratoAbierto));
 }
 
@@ -1418,9 +1455,9 @@ function filaPlanilla(f) {
   return `
     <li class="fila-planilla ${esHoy && (f.situacion === 'atrasado' || f.situacion === 'pendiente') ? 'cobra-hoy' : ''}">
       <button class="cliente" type="button" data-contrato="${f.contrato_id}">
-        ${avatar(f.cliente_nombre)}
+        <span class="cuadro-sf" aria-hidden="true"></span>
         <span class="cliente-info">
-          <span class="cliente-nombre" style="text-transform:capitalize">${esc(bonito(f.cliente_nombre))}</span>
+          <span class="cliente-nombre"><span class="forma-sf">${etiquetaForma(f.forma_pago, f.fecha_primera_cuota)}</span>${esc(bonito(f.cliente_nombre))}</span>
           <span class="fila-etiqueta">${etiqueta}</span>
           <span class="cliente-sub"><span>${esc(detalle)}</span></span>
           <span class="cliente-sub"><span style="text-transform:capitalize">${esc(bonito(f.direccion ?? ''))}</span></span>
@@ -1515,22 +1552,23 @@ $('.pestanas').addEventListener('click', (e) => {
 });
 
 // ---------- "No pagó" ----------
-const MOTIVOS = ['No estaba', 'No tenía plata', 'Pidió volver otro día', 'No quiso pagar', 'Otro'];
+const MOTIVOS = ['No estaba', 'No tenía plata', 'Visitar nuevamente', 'Pidió volver otro día', 'No quiso pagar', 'Otro'];
 const formV = $('#form-visita');
 let filaNoPago = null;
 
-function abrirNoPago(f) {
+function abrirNoPago(f, fecha = planilla?.fecha ?? hoyLocal(), motivo = null) {
   filaNoPago = f;
   formV.reset();
   limpiarErroresDe(formV);
-  formV.elements.fecha.value = planilla.fecha;
+  formV.elements.fecha.value = fecha;
+  $('#visita-titulo').textContent = motivo === 'Visitar nuevamente' ? 'Visitar nuevamente' : 'No pagó';
   $('#visita-contrato').textContent = `Contrato ${idCorto(f.contrato_id)} · ${capital(f.cliente_nombre)}`;
   $('#visita-resumen').innerHTML = tablaResumen([
     ['Debía cobrar', pesos(f.a_cobrar), 'fuerte'],
     ['Atraso actual', f.dias_atraso ? textoAtraso(f.dias_atraso) : 'Al día', f.dias_atraso ? 'peligro' : ''],
   ]);
   $('#visita-motivos').innerHTML = MOTIVOS.map((m) => `
-    <label><input type="radio" name="motivo" value="${esc(m)}"><span>${esc(m)}</span></label>`).join('');
+    <label><input type="radio" name="motivo" value="${esc(m)}" ${m === motivo ? 'checked' : ''}><span>${esc(m)}</span></label>`).join('');
   $('#dlg-visita').showModal();
 }
 
@@ -1553,8 +1591,9 @@ formV.addEventListener('submit', async (e) => {
       fecha: f.fecha.value, motivo, observacion: f.observacion.value,
     });
     $('#dlg-visita').close();
-    await cargarPlanilla();
-    aviso(`${capital(filaNoPago.cliente_nombre)}: no pagó`);
+    if (pagina === 'planilla') await cargarPlanilla();
+    if ($('#dlg-detalle').open && contratoAbierto?.id === filaNoPago.contrato_id) pintarContrato(await api('GET', `/api/contratos/${filaNoPago.contrato_id}`));
+    aviso(`${capital(filaNoPago.cliente_nombre)}: ${motivo === 'Visitar nuevamente' ? 'visitar nuevamente' : 'no pagó'}`);
   } catch (ex) {
     if (ex.campos) mostrarErroresCampos(formV, ex.campos);
     else aviso(ex.message);

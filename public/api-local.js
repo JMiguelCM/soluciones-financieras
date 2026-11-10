@@ -59,7 +59,7 @@ function contratoCompleto(id) {
   const pagos = datos.pagos.filter((p) => p.contrato_id === id).map(conNombres);
   const visitas = datos.visitas.filter((v) => v.contrato_id === id).map(conNombres);
   const moras = datos.moras.filter((m) => m.contrato_id === id).map(conNombres);
-  return armarContrato({ ...k, cliente_nombre: cliente?.nombre, cliente_telefono: cliente?.telefono, cliente_whatsapp: cliente?.whatsapp, creado_por_nombre: nombreDe(k.creado_por) }, pagos, visitas, moras);
+  return armarContrato({ ...k, cliente_nombre: cliente?.nombre, cliente_telefono: cliente?.telefono, cliente_telefono2: cliente?.telefono2, cliente_whatsapp: cliente?.whatsapp, cliente_direccion: cliente?.direccion, cliente_direccion2: cliente?.direccion2, cliente_ocupacion: cliente?.ocupacion, cliente_ruta: cliente?.ruta ?? null, cliente_observaciones: cliente?.observaciones, creado_por_nombre: nombreDe(k.creado_por) }, pagos, visitas, moras);
 }
 
 // ---------- rutas ----------

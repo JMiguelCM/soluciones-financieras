@@ -142,6 +142,7 @@ export function resumenPorCliente(contratos, pagos) {
       r.contratos.push({
         id: k.id,
         forma_pago: k.forma_pago,
+        fecha_primera_cuota: k.fecha_primera_cuota,
         valor_cuota: k.valor_cuota,
         saldo: e.saldo,
         atrasado: e.estado === 'atrasado',
@@ -255,6 +256,7 @@ export function calcularPlanilla(contratos, pagos, fecha, ruta = '', visitas = [
       telefono: k.telefono,
       direccion: k.direccion,
       forma_pago: k.forma_pago,
+      fecha_primera_cuota: k.fecha_primera_cuota,
       valor_cuota: k.valor_cuota,
       cuota,
       cuotas_atraso: e.cuotasAtraso,
