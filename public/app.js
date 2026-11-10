@@ -1680,6 +1680,77 @@ if (MODO_DEMO) {
   });
 }
 
+// ================= planilla en Excel =================
+const SITUACIONES = {
+  atrasado: 'Atrasado', pendiente: 'Por cobrar', visitado: 'No pagó', no_pago: 'No pagó', cubierto: 'Cubierto', pago: 'Pagó',
+};
+
+$('#btn-excel-planilla').addEventListener('click', async () => {
+  if (!planilla?.filas?.length) {
+    aviso('No hay clientes en la planilla de este día');
+    return;
+  }
+  try {
+    const { crearXlsx, descargar } = await import('./excel.js');
+    const { fecha, filas, resumen } = planilla;
+    const rutaTexto = filtroRuta ? (filtroRuta === 'sin' ? 'Sin ruta' : `Ruta ${filtroRuta}`) : 'Todas las rutas';
+    const esPasado = fecha < hoyLocal();
+    const columnas = [
+      { titulo: 'Ruta', ancho: 7 },
+      { titulo: 'Cliente', ancho: 32 },
+      { titulo: 'Teléfono', ancho: 13 },
+      { titulo: 'Dirección', ancho: 26 },
+      { titulo: 'Contrato', ancho: 9 },
+      { titulo: 'Forma de pago', ancho: 13 },
+      { titulo: 'Valor cuota', ancho: 13, pesos: true },
+      { titulo: 'Cuota del día', ancho: 13, pesos: true },
+      { titulo: 'Días atraso', ancho: 11 },
+      { titulo: 'Valor atrasos', ancho: 14, pesos: true },
+      { titulo: 'A cobrar', ancho: 13, pesos: true },
+      { titulo: 'Pagado ese día', ancho: 14, pesos: true },
+      { titulo: 'Saldo', ancho: 13, pesos: true },
+      { titulo: 'Estado', ancho: 12 },
+      { titulo: 'Observación', ancho: 34 },
+    ];
+    const datos = filas.map((f) => [
+      f.ruta ?? '',
+      String(f.cliente_nombre ?? '').toUpperCase(),
+      formatoTel(f.telefono),
+      String(f.direccion ?? '').toUpperCase(),
+      idCorto(f.contrato_id),
+      FORMAS_PAGO[f.forma_pago],
+      f.valor_cuota,
+      f.cuota?.valor ?? 0,
+      f.dias_atraso,
+      f.valor_atrasos,
+      f.a_cobrar,
+      f.pagado_dia,
+      f.saldo,
+      SITUACIONES[f.situacion] ?? f.situacion,
+      f.visita ? [f.visita.motivo, f.visita.observacion].filter(Boolean).join(' · ') : '',
+    ]);
+    const suma = (i) => datos.reduce((s, d) => s + (Number(d[i]) || 0), 0);
+    const total = ['', `TOTAL (${resumen.clientes} clientes)`, '', '', '', '', '', suma(7), '', suma(9), suma(10), suma(11), suma(12), '', ''];
+
+    const blob = crearXlsx({
+      hoja: `Planilla ${fecha}`,
+      titulo: [
+        `Planilla del día · ${fechaLarga(fecha)}`,
+        `${rutaTexto} · ${esPasado ? 'Cuotas del día' : 'Por cobrar'} ${pesos(esPasado ? resumen.cuotas_dia : resumen.a_cobrar)} · Recaudado ${pesos(resumen.recaudado)}`,
+      ],
+      columnas,
+      filas: datos,
+      total,
+    });
+    const ruta = filtroRuta ? `-ruta-${filtroRuta}` : '';
+    descargar(blob, `planilla-${fecha}${ruta}.xlsx`);
+    aviso('Planilla descargada en Excel');
+  } catch (ex) {
+    console.error(ex);
+    aviso('No se pudo crear el Excel');
+  }
+});
+
 // ================= cambio de día =================
 // Si la app queda abierta y cambia la fecha (medianoche), se recalcula quién cobra hoy:
 // el azul pasa a los clientes del nuevo día y la planilla salta al día nuevo.

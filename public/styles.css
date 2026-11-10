@@ -762,3 +762,13 @@ fieldset > .tabla-resumen, fieldset > .segmentos, fieldset > .fila-2 { clear: bo
 
 /* La Cartera total (y el total de cada filtro) solo se ve con el menú ☰ abierto */
 #filtros[hidden] + #total-filtro { display: none !important; }
+
+/* Botón de descargar la planilla en Excel */
+.btn-excel .ic { color: #1d7a45; }
+#pagina-planilla .titulo-pagina { flex-wrap: wrap; gap: 8px; }
+/* Planilla: título a lo ancho y debajo la barra Rutas · ☰ · Excel */
+#pagina-planilla .titulo-pagina { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+#pagina-planilla .titulo-pagina > div:first-child { grid-column: 1 / -1; }
+#pagina-planilla .titulo-pagina .selector-ruta { width: 100%; }
+#pagina-planilla .titulo-pagina .selector-ruta select { max-width: none; width: 100%; }
+#pagina-planilla .titulo-pagina .btn-menu { align-self: stretch; height: auto; min-height: 50px; }
