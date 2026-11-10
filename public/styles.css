@@ -759,3 +759,6 @@ fieldset > .tabla-resumen, fieldset > .segmentos, fieldset > .fila-2 { clear: bo
   .pie-recibo .btn-wa { grid-column: 1 / -1; }
   .pie-recibo .btn { flex: initial; }
 }
+
+/* La Cartera total (y el total de cada filtro) solo se ve con el menú ☰ abierto */
+#filtros[hidden] + #total-filtro { display: none !important; }
