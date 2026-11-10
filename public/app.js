@@ -1061,13 +1061,34 @@ function abrirRecibo(k, pagoId, recienRegistrado) {
   $('#recibo-sub').textContent = `Contrato ${idCorto(k.id)} · ${capital(k.cliente_nombre)} · ${fechaCorta(pago.fecha)}`;
   $('#recibo-ok').hidden = !recienRegistrado;
   $('#recibo-valor').textContent = `${pesos(pago.abono + (pago.int_mora || 0))} recibidos${k.estado.estado === 'pagado' ? ' · ¡contrato pagado!' : ''}`;
-  $('#recibo-texto').value = mensajePago(k, pagoId);
+  const texto = mensajePago(k, pagoId);
+  $('#recibo-texto').value = texto;
+
+  // WhatsApp del cliente; si no tiene, su celular (10 dígitos que empiezan por 3)
+  const numero = [k.cliente_whatsapp, k.cliente_telefono].map((t) => soloDigitos(t)).find((t) => t.length === 10 && t.startsWith('3'));
+  const wa = $('#btn-wa-recibo');
+  if (numero) {
+    wa.href = `https://wa.me/57${numero}?text=${encodeURIComponent(texto)}`;
+    wa.removeAttribute('aria-disabled');
+    $('#btn-wa-texto').textContent = `Enviar a ${formatoTel(numero)}`;
+  } else {
+    wa.removeAttribute('href');
+    wa.setAttribute('aria-disabled', 'true');
+    $('#btn-wa-texto').textContent = 'Sin WhatsApp registrado';
+  }
   $('#dlg-recibo').showModal();
 }
 
 $('#btn-copiar-recibo').addEventListener('click', async () => {
   await copiar($('#recibo-texto').value);
   aviso('Mensaje copiado');
+});
+
+// Enviar por WhatsApp: copia el mensaje (por si acaso) y el enlace abre el chat con el texto ya escrito
+$('#btn-wa-recibo').addEventListener('click', (e) => {
+  if (!e.currentTarget.href) { e.preventDefault(); return; }
+  copiar($('#recibo-texto').value);
+  aviso('Mensaje copiado · abriendo WhatsApp');
 });
 
 // ================= interés de mora =================

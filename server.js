@@ -121,7 +121,7 @@ app.get('/api/planilla', (req, res) => {
 // ---------- contratos ----------
 function contratoCompleto(id) {
   const k = db.prepare(`
-    SELECT k.*, c.nombre AS cliente_nombre, u.nombre AS creado_por_nombre
+    SELECT k.*, c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.whatsapp AS cliente_whatsapp, u.nombre AS creado_por_nombre
     FROM contratos k JOIN clientes c ON c.id = k.cliente_id LEFT JOIN usuarios u ON u.id = k.creado_por
     WHERE k.id = ?`).get(id);
   if (!k) return null;

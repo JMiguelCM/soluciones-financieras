@@ -476,13 +476,16 @@
       </div>
       <label for="recibo-texto">Mensaje para el cliente</label>
       <textarea id="recibo-texto" class="recibo-texto" rows="7" readonly></textarea>
-      <p class="ayuda">Cópialo y pégalo en el chat del cliente.</p>
+      <p class="ayuda">"Enviar" copia el mensaje y abre el WhatsApp del cliente con el texto ya escrito; solo falta darle enviar.</p>
     </div>
-    <div class="hoja-pie">
-      <button class="btn btn-secundario" type="button" data-cerrar>Cerrar</button>
-      <button class="btn btn-primario" type="button" id="btn-copiar-recibo">
-        <svg class="ic"><use href="#i-copy"/></svg> Copiar mensaje
+    <div class="hoja-pie pie-recibo">
+      <a class="btn btn-wa" id="btn-wa-recibo" target="_blank" rel="noopener">
+        <svg class="ic"><use href="#i-chat"/></svg> <span id="btn-wa-texto">Enviar por WhatsApp</span>
+      </a>
+      <button class="btn btn-secundario" type="button" id="btn-copiar-recibo">
+        <svg class="ic"><use href="#i-copy"/></svg> Copiar
       </button>
+      <button class="btn btn-secundario" type="button" data-cerrar>Cerrar</button>
     </div>
   </dialog>
 
