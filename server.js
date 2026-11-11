@@ -25,7 +25,7 @@ app.use(express.static(join(raiz, 'public')));
 // ---------- clave de acceso ----------
 // En internet cualquiera con el enlace podría entrar: si CLAVE_ACCESO está definida,
 // toda la API exige esa clave (encabezado X-Clave). En el computador puede quedar sin clave.
-const CLAVE_ACCESO = process.env.CLAVE_ACCESO || '';
+const CLAVE_ACCESO = (process.env.CLAVE_ACCESO || '').trim(); // sin espacios que se cuelen al pegarla
 const claveCorrecta = (dada) => {
   const a = Buffer.from(String(dada ?? ''));
   const b = Buffer.from(CLAVE_ACCESO);
