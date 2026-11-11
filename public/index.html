@@ -49,6 +49,23 @@
     <button type="button" id="btn-reiniciar-demo">Reiniciar datos</button>
   </div>
 
+  <!-- ===================== CLAVE DE ACCESO (solo si el servidor la exige) ===================== -->
+  <section id="vista-clave" class="ingreso" hidden>
+    <div class="ingreso-caja">
+      <div class="logo-grande" aria-hidden="true">SF</div>
+      <h1>Soluciones Financieras</h1>
+      <p class="sub">Escribe la clave de acceso. Solo se pide una vez en este celular.</p>
+      <form id="form-clave" class="panel" autocomplete="off" novalidate>
+        <label class="sr" for="clave-acceso">Clave de acceso</label>
+        <div class="crear-usuario">
+          <input id="clave-acceso" type="password" autocomplete="current-password" placeholder="Clave de acceso">
+          <button class="btn btn-primario" type="submit">Entrar</button>
+        </div>
+        <p class="error-campo" id="error-clave" hidden></p>
+      </form>
+    </div>
+  </section>
+
   <!-- ===================== INGRESO ===================== -->
   <section id="vista-ingreso" class="ingreso" hidden>
     <div class="ingreso-caja">
@@ -599,7 +616,8 @@
       setTimeout(function () {
         var ingreso = document.getElementById('vista-ingreso');
         var app = document.getElementById('vista-app');
-        if (ingreso && app && ingreso.hidden && app.hidden) mostrar();
+        var clave = document.getElementById('vista-clave');
+        if (ingreso && app && ingreso.hidden && app.hidden && (!clave || clave.hidden)) mostrar();
       }, 6000);
     })();
   </script>

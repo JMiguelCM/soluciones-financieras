@@ -1,0 +1,18 @@
+# Despliegue en Render (plan gratuito). En Render: New → Blueprint → este repositorio.
+# Las variables marcadas con sync: false se escriben a mano en Render (no se guardan en GitHub).
+services:
+  - type: web
+    name: soluciones-financieras
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22.14.0"
+      - key: TZ
+        value: America/Bogota            # "hoy" debe ser el día de Colombia, no el del servidor
+      - key: CLAVE_ACCESO
+        sync: false                      # clave que se pide una vez en cada celular

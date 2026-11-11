@@ -138,6 +138,7 @@ async function api(metodo, ruta, cuerpo) {
     headers: {
       'Content-Type': 'application/json',
       ...(usuario ? { 'X-Usuario-Id': String(usuario.id) } : {}),
+      ...(leerClave() ? { 'X-Clave': leerClave() } : {}),
     },
     body: cuerpo ? JSON.stringify(cuerpo) : undefined,
   });
@@ -146,6 +147,8 @@ async function api(metodo, ruta, cuerpo) {
     const e = new Error(datos.error || `Error ${r.status}`);
     e.campos = datos.campos;
     e.estado = r.status;
+    e.clave = Boolean(datos.clave);
+    if (e.clave) mostrarClave(leerClave() ? 'La clave guardada ya no es válida. Escríbela de nuevo.' : '');
     throw e;
   }
   return datos;
@@ -1826,7 +1829,7 @@ prepararMenu('btn-filtros', 'filtros', () => filtro === 'todos');
 prepararMenu('btn-filtros-planilla', 'planilla-filtros', () => vistaPlanilla === 'pendientes');
 
 // ================= inicio =================
-(async function iniciar() {
+async function iniciar() {
   try {
     const guardado = leerSesion();
     if (guardado) {
@@ -1837,7 +1840,41 @@ prepararMenu('btn-filtros-planilla', 'planilla-filtros', () => vistaPlanilla ===
     }
     await mostrarIngreso();
   } catch (ex) {
+    if (ex.clave) return; // ya se está mostrando la pantalla de la clave
     console.error('No se pudo iniciar la app', ex);
     window.mostrarFalloCarga?.(ex.message);
   }
-})();
+}
+
+// ---------- clave de acceso (solo cuando el servidor la exige) ----------
+const CLAVE_ACCESO = 'sf.clave';
+function leerClave() {
+  try { return localStorage.getItem(CLAVE_ACCESO) || ''; } catch { return ''; }
+}
+function mostrarClave(mensaje) {
+  try { localStorage.removeItem(CLAVE_ACCESO); } catch { /* sin almacenamiento */ }
+  document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  $('#vista-ingreso').hidden = true;
+  $('#vista-app').hidden = true;
+  $('#vista-clave').hidden = false;
+  const err = $('#error-clave');
+  err.textContent = mensaje || '';
+  err.hidden = !mensaje;
+  setTimeout(() => $('#clave-acceso').focus(), 50);
+}
+$('#form-clave').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const clave = $('#clave-acceso').value.trim();
+  if (!clave) return;
+  try { localStorage.setItem(CLAVE_ACCESO, clave); } catch { /* sin almacenamiento */ }
+  $('#vista-clave').hidden = true;
+  $('#clave-acceso').value = '';
+  try {
+    await api('GET', '/api/usuarios'); // comprueba la clave
+  } catch (ex) {
+    if (ex.clave) { mostrarClave('Clave incorrecta.'); return; }
+  }
+  iniciar();
+});
+
+iniciar();

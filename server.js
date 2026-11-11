@@ -1,4 +1,5 @@
 import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
@@ -14,6 +15,21 @@ const PUERTO = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 app.use(express.static(join(raiz, 'public')));
+
+// ---------- clave de acceso ----------
+// En internet cualquiera con el enlace podría entrar: si CLAVE_ACCESO está definida,
+// toda la API exige esa clave (encabezado X-Clave). En el computador puede quedar sin clave.
+const CLAVE_ACCESO = process.env.CLAVE_ACCESO || '';
+const claveCorrecta = (dada) => {
+  const a = Buffer.from(String(dada ?? ''));
+  const b = Buffer.from(CLAVE_ACCESO);
+  return a.length === b.length && timingSafeEqual(a, b);
+};
+app.use('/api', (req, res, next) => {
+  if (!CLAVE_ACCESO || claveCorrecta(req.get('X-Clave'))) return next();
+  // pequeña espera para que no se puedan probar claves a la carrera
+  setTimeout(() => res.status(401).json({ error: 'Clave de acceso incorrecta.', clave: true }), 800);
+});
 
 // ---------- utilidades ----------
 function usuarioActual(req) {
