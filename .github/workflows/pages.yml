@@ -1,10 +1,11 @@
-# Publica la versión demo (carpeta public/) en GitHub Pages en cada push a main.
-# En GitHub Pages no hay servidor: la app detecta *.github.io y usa datos simulados en el navegador.
-name: Publicar demo en GitHub Pages
+# GitHub Pages ya no publica la app (ahora corre en Render con su base en Turso).
+# Solo publica un aviso de que la versión de prueba se retiró (carpeta pages/).
+name: Publicar aviso en GitHub Pages
 
 on:
   push:
     branches: [main]
+    paths: [pages/**, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -24,18 +25,9 @@ jobs:
       url: ${{ steps.despliegue.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      # GitHub Pages deja cada archivo 10 min en la caché del navegador. Si tras publicar se mezclan
-      # archivos viejos y nuevos, la app no arranca. Se agrega ?v=<commit> a cada archivo para que
-      # el navegador siempre cargue juntos los de la misma versión.
-      - name: Versionar archivos (evitar mezcla de caché)
-        run: |
-          V="${GITHUB_SHA::7}"
-          sed -i -E "s#'\./([a-z-]+)\.js'#'./\1.js?v=$V'#g" public/*.js
-          sed -i -E "s#src=\"app\.js\"#src=\"app.js?v=$V\"#; s#href=\"styles\.css\"#href=\"styles.css?v=$V\"#" public/index.html
-          grep -o "?v=$V" public/*.js public/index.html | sort | uniq -c
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: pages
       - id: despliegue
         uses: actions/deploy-pages@v4

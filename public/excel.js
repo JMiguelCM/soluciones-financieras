@@ -118,15 +118,14 @@ const ESTILOS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </styleSheet>`;
 
 /**
- * Crea un .xlsx con una hoja.
+ * Arma el XML de una hoja.
  * @param {object} o
- * @param {string} o.hoja nombre de la hoja
  * @param {string[]} o.titulo líneas de título (arriba, en negrita)
  * @param {{titulo: string, ancho?: number, pesos?: boolean}[]} o.columnas
  * @param {Array<Array<string|number|null>>} o.filas
  * @param {Array<string|number|null>} [o.total] fila de totales
  */
-export function crearXlsx({ hoja = 'Hoja1', titulo = [], columnas, filas, total }) {
+function armarHoja({ titulo = [], columnas, filas, total }) {
   const lineas = [];
   let r = 0;
   const celda = (c, valor, estilo) => {
@@ -148,23 +147,48 @@ export function crearXlsx({ hoja = 'Hoja1', titulo = [], columnas, filas, total 
   if (total) fila(total, (c, v) => (columnas[c]?.pesos && typeof v === 'number' ? 4 : 3));
 
   const anchos = columnas.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.ancho ?? 14}" customWidth="1"/>`).join('');
-  const ultima = columna(columnas.length - 1);
-  const hojaXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  const ultima = columna(Math.max(0, columnas.length - 1));
+  const rango = `A${filaEncabezado}:${ultima}${filaEncabezado + filas.length}`;
+  return {
+    filaEncabezado,
+    ultima,
+    nFilas: filas.length,
+    xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheetViews><sheetView workbookViewId="0"><pane ySplit="${filaEncabezado}" topLeftCell="A${filaEncabezado + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
   <cols>${anchos}</cols>
   <sheetData>${lineas.join('')}</sheetData>
-  <autoFilter ref="A${filaEncabezado}:${ultima}${filaEncabezado + filas.length}"/>
-</worksheet>`;
+  <autoFilter ref="${rango}"/>
+</worksheet>`,
+  };
+}
 
-  const nombreHoja = xml(hoja.slice(0, 31).replace(/[\\/?*[\]:]/g, '-'));
+/**
+ * Crea un .xlsx con una o varias hojas.
+ * @param {Array<{hoja: string, titulo?: string[], columnas: object[], filas: any[][], total?: any[]}>} hojas
+ */
+export function crearLibro(hojas) {
+  const usados = new Set();
+  const nombres = hojas.map((h, i) => {
+    let n = String(h.hoja || `Hoja${i + 1}`).replace(/[\\/?*[\]:]/g, '-').slice(0, 31);
+    while (usados.has(n.toLowerCase())) n = `${n.slice(0, 28)}-${i + 1}`;
+    usados.add(n.toLowerCase());
+    return n;
+  });
+  const armadas = hojas.map(armarHoja);
+
+  const tipos = armadas.map((_, i) => `  <Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('\n');
+  const hojasXml = nombres.map((n, i) => `<sheet name="${xml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('');
+  const filtros = armadas.map((a, i) => `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${xml(nombres[i])}'!$A$${a.filaEncabezado}:$${a.ultima}$${a.filaEncabezado + a.nFilas}</definedName>`).join('');
+  const relaciones = armadas.map((_, i) => `  <Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('\n');
+
   return crearZip([
     { nombre: '[Content_Types].xml', contenido: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+${tipos}
   <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>` },
     { nombre: '_rels/.rels', contenido: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -173,17 +197,22 @@ export function crearXlsx({ hoja = 'Hoja1', titulo = [], columnas, filas, total 
 </Relationships>` },
     { nombre: 'xl/workbook.xml', contenido: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets><sheet name="${nombreHoja}" sheetId="1" r:id="rId1"/></sheets>
-  <definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${nombreHoja}'!$A$${filaEncabezado}:$${ultima}$${filaEncabezado + filas.length}</definedName></definedNames>
+  <sheets>${hojasXml}</sheets>
+  <definedNames>${filtros}</definedNames>
 </workbook>` },
     { nombre: 'xl/_rels/workbook.xml.rels', contenido: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+${relaciones}
+  <Relationship Id="rId${armadas.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>` },
     { nombre: 'xl/styles.xml', contenido: ESTILOS },
-    { nombre: 'xl/worksheets/sheet1.xml', contenido: hojaXml },
+    ...armadas.map((a, i) => ({ nombre: `xl/worksheets/sheet${i + 1}.xml`, contenido: a.xml })),
   ]);
+}
+
+/** Atajo: libro de una sola hoja. */
+export function crearXlsx(hoja) {
+  return crearLibro([hoja]);
 }
 
 /** Descarga un Blob con el nombre dado (funciona en celulares, incluido iPhone). */

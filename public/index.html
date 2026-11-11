@@ -9,8 +9,8 @@
   <meta name="format-detection" content="telephone=no, email=no, address=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Soluciones">
-  <title>Soluciones Financieras</title>
+  <meta name="apple-mobile-web-app-title" content="Crea y crece">
+  <title>Crea y crece DF</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -44,16 +44,11 @@
     </defs>
   </svg>
 
-  <div id="banda-demo" class="banda-demo" hidden>
-    <span><strong>Versión demo</strong> · datos de prueba guardados solo en este navegador</span>
-    <button type="button" id="btn-reiniciar-demo">Reiniciar datos</button>
-  </div>
-
   <!-- ===================== CLAVE DE ACCESO (solo si el servidor la exige) ===================== -->
   <section id="vista-clave" class="ingreso" hidden>
     <div class="ingreso-caja">
-      <div class="logo-grande" aria-hidden="true">SF</div>
-      <h1>Soluciones Financieras</h1>
+      <div class="logo-grande" aria-hidden="true">CC</div>
+      <h1>Crea y crece DF</h1>
       <p class="sub">Escribe la clave de acceso. Solo se pide una vez en este celular.</p>
       <form id="form-clave" class="panel" autocomplete="off" novalidate>
         <label class="sr" for="clave-acceso">Clave de acceso</label>
@@ -69,8 +64,8 @@
   <!-- ===================== INGRESO ===================== -->
   <section id="vista-ingreso" class="ingreso" hidden>
     <div class="ingreso-caja">
-      <div class="logo-grande" aria-hidden="true">SF</div>
-      <h1>Soluciones Financieras</h1>
+      <div class="logo-grande" aria-hidden="true">CC</div>
+      <h1>Crea y crece DF</h1>
       <p class="sub">Control de créditos y cobros</p>
 
       <div class="panel">
@@ -96,8 +91,8 @@
   <section id="vista-app" class="app" hidden>
     <header class="topbar">
       <div class="topbar-in">
-        <div class="logo" aria-hidden="true">SF</div>
-        <span class="topbar-nombre">Soluciones Financieras</span>
+        <div class="logo" aria-hidden="true">CC</div>
+        <span class="topbar-nombre">Crea y crece DF</span>
         <nav class="pestanas" aria-label="Secciones">
           <button type="button" data-pagina="clientes" aria-current="page">Clientes</button>
           <button type="button" data-pagina="planilla">Planilla</button>
@@ -170,6 +165,24 @@
         </label>
       </div>
       <div id="totales-contenido"><p class="sub">Cargando…</p></div>
+
+      <section class="tarjeta-tabla respaldo" id="respaldo">
+        <h3>Copia de seguridad</h3>
+        <p class="sub">Descarga todos los datos: usuarios, clientes, contratos, pagos, visitas e intereses de mora. Guárdala en tu correo o en Drive de vez en cuando. Si algún día la base se llena o quieres cambiarla, la copia <strong>para restaurar</strong> se carga en una base nueva y vacía.</p>
+        <div class="respaldo-botones">
+          <button class="btn btn-primario" type="button" id="btn-respaldo-excel">
+            <svg class="ic"><use href="#i-download"/></svg> Descargar en Excel
+          </button>
+          <button class="btn btn-secundario" type="button" id="btn-respaldo-json">
+            <svg class="ic"><use href="#i-download"/></svg> Copia para restaurar
+          </button>
+          <label class="btn btn-secundario" for="archivo-respaldo">
+            <svg class="ic"><use href="#i-refresh"/></svg> Restaurar una copia
+          </label>
+          <input type="file" id="archivo-respaldo" accept=".json,application/json" hidden>
+        </div>
+        <p class="sub" id="respaldo-estado"></p>
+      </section>
     </main>
 
     <main class="contenido" id="pagina-clientes">
@@ -591,7 +604,7 @@
 
   <!-- Si la app no logra arrancar (archivos a medio actualizar, sin conexión…), mejor un aviso que una pantalla vacía -->
   <div id="fallo-carga" class="fallo-carga" hidden>
-    <div class="logo-grande" aria-hidden="true">SF</div>
+    <div class="logo-grande" aria-hidden="true">CC</div>
     <h2>La app no cargó bien</h2>
     <p>Puede pasar justo después de una actualización. Recarga la página.</p>
     <p class="sub" id="fallo-detalle"></p>

@@ -1,17 +1,17 @@
 {
-  "name": "soluciones-financieras",
+  "name": "crea-y-crece-df",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Control de créditos - Soluciones Financieras",
+  "description": "Crea y crece DF - control de créditos y cobros",
   "scripts": {
-    "start": "node server.js",
-    "demo": "node demo.js"
+    "start": "node server.js"
   },
   "engines": {
     "node": ">=22.13"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "express": "^4.21.2"
   }
 }

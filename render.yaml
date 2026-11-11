@@ -2,7 +2,7 @@
 # Las variables marcadas con sync: false se escriben a mano en Render (no se guardan en GitHub).
 services:
   - type: web
-    name: soluciones-financieras
+    name: crea-y-crece-df
     runtime: node
     plan: free
     buildCommand: npm ci --omit=dev
@@ -16,3 +16,7 @@ services:
         value: America/Bogota            # "hoy" debe ser el día de Colombia, no el del servidor
       - key: CLAVE_ACCESO
         sync: false                      # clave que se pide una vez en cada celular
+      - key: TURSO_DATABASE_URL
+        sync: false                      # libsql://… de la base en Turso
+      - key: TURSO_AUTH_TOKEN
+        sync: false                      # token de la base en Turso

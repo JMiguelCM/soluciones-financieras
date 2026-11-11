@@ -123,16 +123,7 @@ const ESTADOS = {
   refinanciado: { texto: 'Refinanciado', clase: 'gris' },
 };
 
-// En GitHub Pages no hay servidor: la app usa una API simulada dentro del navegador.
-// También se puede forzar con ?demo en la dirección.
-const MODO_DEMO = location.hostname.endsWith('github.io') || new URLSearchParams(location.search).has('demo');
-let moduloLocal = null;
-
 async function api(metodo, ruta, cuerpo) {
-  if (MODO_DEMO) {
-    moduloLocal ??= await import('./api-local.js');
-    return moduloLocal.apiLocal(metodo, ruta, cuerpo, usuario?.id);
-  }
   const r = await fetch(ruta, {
     method: metodo,
     headers: {
@@ -1711,17 +1702,6 @@ $('#totales-contenido').addEventListener('click', (e) => {
   cargarTotales();
 });
 
-// ================= modo demo =================
-if (MODO_DEMO) {
-  $('#banda-demo').hidden = false;
-  $('#btn-reiniciar-demo').addEventListener('click', async () => {
-    if (!confirm('¿Borrar los cambios que hiciste y volver a los datos de prueba originales?')) return;
-    moduloLocal ??= await import('./api-local.js');
-    moduloLocal.reiniciarDemo();
-    location.reload();
-  });
-}
-
 // ================= planilla en Excel =================
 const SITUACIONES = {
   atrasado: 'Atrasado', pendiente: 'Por cobrar', visitado: 'No pagó', no_pago: 'No pagó', cubierto: 'Cubierto', pago: 'Pagó',
@@ -1790,6 +1770,87 @@ $('#btn-excel-planilla').addEventListener('click', async () => {
   } catch (ex) {
     console.error(ex);
     aviso('No se pudo crear el Excel');
+  }
+});
+
+// ================= copia de seguridad =================
+const COLUMNAS_PESOS = new Set(['prestamo', 'credito', 'valor_cuota', 'abono', 'int_mora', 'valor', 'saldo_trasladado', 'mora_trasladada', 'adicional']);
+const HOJAS_RESPALDO = [
+  ['clientes', 'Clientes'], ['contratos', 'Contratos'], ['pagos', 'Pagos'],
+  ['visitas', 'Visitas sin pago'], ['moras', 'Intereses de mora'], ['usuarios', 'Usuarios'],
+];
+
+function estadoRespaldo(texto) { $('#respaldo-estado').textContent = texto; }
+
+async function bajarRespaldo() {
+  const r = await api('GET', '/api/respaldo');
+  const total = Object.values(r.conteo).reduce((s, n) => s + n, 0);
+  return { r, total };
+}
+
+$('#btn-respaldo-json').addEventListener('click', async () => {
+  try {
+    estadoRespaldo('Preparando la copia…');
+    const { descargar } = await import('./excel.js');
+    const { r, total } = await bajarRespaldo();
+    const blob = new Blob([JSON.stringify(r)], { type: 'application/json' });
+    descargar(blob, `copia-crea-y-crece-${hoyLocal()}.json`);
+    estadoRespaldo(`Copia descargada: ${total} registros (${r.conteo.clientes} clientes, ${r.conteo.contratos} contratos, ${r.conteo.pagos} pagos).`);
+  } catch (ex) {
+    estadoRespaldo(`No se pudo descargar: ${ex.message}`);
+  }
+});
+
+$('#btn-respaldo-excel').addEventListener('click', async () => {
+  try {
+    estadoRespaldo('Preparando el Excel…');
+    const { crearLibro, descargar } = await import('./excel.js');
+    const { r, total } = await bajarRespaldo();
+    const { tablas } = r;
+    const clientePor = new Map(tablas.clientes.map((c) => [c.id, c.nombre]));
+    const contratoPor = new Map(tablas.contratos.map((k) => [k.id, k.cliente_id]));
+    const usuarioPor = new Map(tablas.usuarios.map((u) => [u.id, u.nombre]));
+    const hojas = HOJAS_RESPALDO.map(([tabla, nombre]) => {
+      const filas = tablas[tabla] ?? [];
+      let cols = filas.length ? Object.keys(filas[0]) : ['id'];
+      // nombre del cliente al lado de cada contrato / pago, para leerlo sin cruzar hojas
+      const conCliente = tabla === 'contratos' || 'contrato_id' in (filas[0] ?? {});
+      if (conCliente) cols = ['id', 'cliente', ...cols.filter((c) => c !== 'id')];
+      const valor = (f, c) => {
+        if (c === 'cliente') return clientePor.get(tabla === 'contratos' ? f.cliente_id : contratoPor.get(f.contrato_id)) ?? '';
+        if ((c === 'creado_por' || c === 'anulado_por') && f[c] != null) return usuarioPor.get(f[c]) ?? f[c];
+        return f[c] ?? '';
+      };
+      return {
+        hoja: nombre,
+        titulo: [`${nombre} · copia del ${r.fecha}`],
+        columnas: cols.map((c) => ({ titulo: c, ancho: c === 'cliente' || c === 'nombre' ? 30 : Math.min(34, Math.max(10, c.length + 4)), pesos: COLUMNAS_PESOS.has(c) })),
+        filas: filas.map((f) => cols.map((c) => valor(f, c))),
+      };
+    });
+    descargar(crearLibro(hojas), `copia-crea-y-crece-${hoyLocal()}.xlsx`);
+    estadoRespaldo(`Excel descargado con ${total} registros en ${hojas.length} hojas.`);
+  } catch (ex) {
+    estadoRespaldo(`No se pudo crear el Excel: ${ex.message}`);
+  }
+});
+
+$('#archivo-respaldo').addEventListener('change', async (e) => {
+  const archivo = e.target.files[0];
+  e.target.value = '';
+  if (!archivo) return;
+  try {
+    const respaldo = JSON.parse(await archivo.text());
+    const c = respaldo.conteo ?? {};
+    if (!confirm(`¿Restaurar la copia del ${respaldo.fecha ?? '?'}?\n${c.clientes ?? 0} clientes, ${c.contratos ?? 0} contratos y ${c.pagos ?? 0} pagos.\n\nSolo funciona en una base nueva, sin clientes ni contratos.`)) return;
+    estadoRespaldo('Restaurando…');
+    const r = await api('POST', '/api/respaldo/restaurar', respaldo);
+    estadoRespaldo(`Copia restaurada: ${Object.values(r.conteo).reduce((s, n) => s + n, 0)} registros.`);
+    aviso('Copia restaurada');
+    guardarSesion(null);
+    setTimeout(() => location.reload(), 1200);
+  } catch (ex) {
+    estadoRespaldo(ex instanceof SyntaxError ? 'Ese archivo no es una copia de seguridad válida.' : ex.message);
   }
 });
 

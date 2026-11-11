@@ -1,37 +1,41 @@
-# Soluciones Financieras
+# Crea y crece DF
 
-Aplicación web para el control de créditos y cobros: usuarios, clientes, contratos, registro de pagos, filtros por ruta y totales.
+Aplicación web para el control de créditos y cobros: usuarios, clientes, contratos, registro de pagos,
+planilla del día, refinanciación, intereses de mora, totales y copia de seguridad.
 
-## Requisitos
+## En internet (Render + Turso, plan gratuito)
 
-- Node.js 22.13 o superior (usa `node:sqlite`, sin instalar base de datos aparte).
+- **Servidor:** Render, a partir de `render.yaml` (New → Blueprint → este repositorio).
+- **Base de datos:** Turso (SQLite en la nube).
+- Variables que se escriben a mano en Render:
+  - `TURSO_DATABASE_URL`: `libsql://…` de la base.
+  - `TURSO_AUTH_TOKEN`: token de la base.
+  - `CLAVE_ACCESO`: clave que la app pide una vez en cada celular.
+- `TZ=America/Bogota` ya viene en `render.yaml`: así "hoy" es el día de Colombia.
 
-## Uso
+## En el computador
 
 ```bash
 npm install
-npm start        # app real en http://localhost:3000 (base en data/soluciones.db)
-npm run demo     # app con datos simulados en http://localhost:3001 (base en data/demo.db)
+npm start        # http://localhost:3000 · base local en data/creaycrece.db
 ```
 
-La carpeta `data/` no se sube al repositorio: ahí quedan las bases de datos.
+Sin `TURSO_DATABASE_URL` la app usa el archivo local. Sin `CLAVE_ACCESO` no pide clave.
 
-## Versión demo en GitHub Pages
+## Copia de seguridad
 
-Cada push a `main` publica la carpeta `public/` en GitHub Pages (`.github/workflows/pages.yml`).
-Pages no corre el servidor, así que en `*.github.io` la app usa `public/api-local.js`: una copia de la API
-que funciona dentro del navegador con datos simulados guardados en `localStorage` (cada navegador tiene los suyos;
-el botón "Reiniciar datos" los vuelve a generar). Localmente se puede probar igual abriendo la app con `?demo`.
+En **Totales → Copia de seguridad**:
 
-Para activarlo la primera vez: en GitHub, **Settings → Pages → Source: GitHub Actions**.
+- **Descargar en Excel:** todas las tablas, una hoja por tabla, para leerlas.
+- **Copia para restaurar** (`.json`): con ella se cargan todos los datos en otra base **vacía**
+  (por ejemplo, si la base de Turso se llena y se crea una nueva).
 
 ## Estructura
 
-- `server.js`: API (usuarios, clientes, contratos, pagos, totales).
-- `db.js`: creación de tablas SQLite.
-- `public/calculos.js`: cronograma de cuotas, saldos, atrasos, picos y adelantos (lo usan el servidor y el navegador).
-- `public/logica.js`: validaciones, resumen por cliente y totales (compartido por el servidor y el modo demo).
-- `public/demo-datos.js`: generador de datos simulados (lo usan `npm run demo` y el modo demo).
-- `public/api-local.js`: API dentro del navegador para la demo sin servidor.
+- `server.js`: API (usuarios, clientes, contratos, pagos, visitas, moras, totales, planilla, respaldo).
+- `basedatos.js`: conexión a Turso o al SQLite local y creación de tablas.
+- `public/calculos.js`: cronograma de cuotas, saldos, atrasos, picos y adelantos.
+- `public/logica.js`: validaciones, resumen por cliente, totales, planilla, mora y refinanciación.
+- `public/excel.js`: genera archivos `.xlsx` en el navegador (planilla y copia de seguridad).
 - `public/`: interfaz (HTML, CSS y JavaScript sin frameworks).
-- `demo.js`: genera datos simulados y arranca la app.
+- `pages/`: aviso que publica GitHub Pages (la versión de prueba se retiró).
