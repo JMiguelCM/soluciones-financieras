@@ -5,6 +5,7 @@ services:
     name: crea-y-crece-df
     runtime: node
     plan: free
+    region: virginia                     # junto a la base de Turso (AWS US East)
     buildCommand: npm ci --omit=dev
     startCommand: node server.js
     healthCheckPath: /
