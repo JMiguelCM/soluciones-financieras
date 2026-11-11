@@ -187,7 +187,7 @@ async function abrirLocal(ruta) {
 export async function abrirBase() {
   const url = process.env.TURSO_DATABASE_URL;
   const base = url
-    ? await abrirTurso(url, process.env.TURSO_AUTH_TOKEN)
+    ? await abrirTurso(url.trim(), limpiarToken(process.env.TURSO_AUTH_TOKEN))
     : await abrirLocal(process.env.SF_DB || join(raiz, 'data', 'creaycrece.db'));
 
   await base.script(ESQUEMA);
@@ -198,4 +198,9 @@ export async function abrirBase() {
     }
   }
   return base;
+}
+
+/** Quita lo que suele colarse al pegar el token: espacios, saltos de línea, comillas o "Bearer". */
+function limpiarToken(token) {
+  return token?.trim().replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim() || undefined;
 }
