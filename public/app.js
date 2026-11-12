@@ -784,7 +784,6 @@ $('#det-contenido').addEventListener('click', async (e) => {
 // ================= nuevo contrato =================
 const formK = $('#form-contrato');
 let cuotaManual = false;   // valor de la cuota escrito a mano
-let cuotasManual = false;  // número de cuotas escrito a mano (si no, sale del plazo en meses)
 let primeraManual = false;
 let clienteContrato = null;
 
@@ -796,7 +795,6 @@ function prepararFormContrato(c, viejo) {
   formK.reset();
   limpiarErroresDe(formK);
   cuotaManual = false;
-  cuotasManual = false;
   primeraManual = false;
   $('#contrato-cliente').textContent = capital(c.nombre);
   $('#contrato-titulo').textContent = viejo ? `Refinanciar contrato ${idCorto(viejo.id)}` : 'Nuevo contrato';
@@ -844,8 +842,8 @@ function recalcularContrato() {
   const prestamo = leerPesos(f.prestamo.value);
   const interesMes = Number(f.interes.value) || 0;
   const meses = Number(f.meses.value) || 0;
-  // el plazo en meses da el número de cuotas (2 meses quincenal → 4), salvo que lo cambien a mano
-  if (!cuotasManual) f.num_cuotas.value = meses ? Math.max(1, Math.round(meses * CUOTAS_POR_MES[forma])) : '';
+  // plazo y cuotas van amarrados: 2 meses quincenal → 4 cuotas (y al revés, desde el campo de cuotas)
+  f.num_cuotas.value = meses ? Math.max(1, Math.round(meses * CUOTAS_POR_MES[forma])) : '';
   const n = Number(f.num_cuotas.value) || 0;
   const interes = interesPorMeses(prestamo, interesMes, meses);
 
@@ -893,12 +891,28 @@ campoDinero(formK.elements.prestamo, recalcularContrato);
 campoDinero(formK.elements.adicional, recalcularContrato);
 $('#k-incluir-mora').addEventListener('change', recalcularContrato);
 campoDinero(formK.elements.valor_cuota, () => { cuotaManual = formK.elements.valor_cuota.value !== ''; recalcularContrato(); });
-formK.elements.num_cuotas.addEventListener('input', () => { cuotasManual = formK.elements.num_cuotas.value !== ''; cuotaManual = false; recalcularContrato(); });
-formK.elements.meses.addEventListener('input', () => { cuotasManual = false; cuotaManual = false; recalcularContrato(); });
+// al cambiar las cuotas se recalcula el plazo (6 quincenas = 3 meses), y con él el interés
+formK.elements.num_cuotas.addEventListener('input', () => {
+  const f = formK.elements;
+  const n = Number(f.num_cuotas.value) || 0;
+  f.meses.value = n ? String(Math.round((n / CUOTAS_POR_MES[f.forma_pago.value]) * 100) / 100) : '';
+  cuotaManual = false;
+  recalcularContrato();
+});
+formK.elements.meses.addEventListener('input', () => { cuotaManual = false; recalcularContrato(); });
 formK.elements.interes.addEventListener('input', () => { cuotaManual = false; recalcularContrato(); });
 formK.elements.fecha_inicio.addEventListener('input', recalcularContrato);
 formK.elements.fecha_primera_cuota.addEventListener('input', () => { primeraManual = true; recalcularContrato(); });
-formK.querySelectorAll('[name="forma_pago"]').forEach((r) => r.addEventListener('change', () => { primeraManual = false; recalcularContrato(); }));
+formK.querySelectorAll('[name="forma_pago"]').forEach((r) => r.addEventListener('change', () => {
+  primeraManual = false;
+  cuotaManual = false;
+  recalcularContrato();
+  // si el plazo no da cuotas enteras (2,5 meses mensual → 3 cuotas), el plazo se ajusta a las cuotas reales
+  const f = formK.elements;
+  const n = Number(f.num_cuotas.value) || 0;
+  const meses = n ? Math.round((n / CUOTAS_POR_MES[f.forma_pago.value]) * 100) / 100 : 0;
+  if (n && meses !== Number(f.meses.value)) { f.meses.value = String(meses); recalcularContrato(); }
+}));
 formK.addEventListener('input', (e) => {
   if (!e.target.name) return;
   e.target.classList.remove('invalido');
