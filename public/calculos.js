@@ -94,11 +94,18 @@ export function cronograma(primera, forma, n) {
   return fechas;
 }
 
+/** Cuotas que caben en un mes según la forma de pago (diario: lunes a sábado). */
+export const CUOTAS_POR_MES = { D: 26, S: 4, Q: 2, M: 1 };
+
+/** Interés en pesos: cada mes del plazo suma su porcentaje (300.000 al 20 % a 2 meses → 120.000). */
+export function interesPorMeses(prestamo, interesMesPct, meses) {
+  return Math.round(prestamo * ((interesMesPct || 0) / 100) * (meses || 0));
+}
+
 /** Valor de cuota sugerido: (préstamo + interés) / cuotas, redondeado al mil más cercano. */
-export function cuotaSugerida(prestamo, interesPct, n) {
+export function cuotaSugerida(prestamo, interesPesos, n) {
   if (!prestamo || !n) return 0;
-  const total = prestamo * (1 + (interesPct || 0) / 100);
-  return Math.round(total / n / 1000) * 1000;
+  return Math.round((prestamo + (interesPesos || 0)) / n / 1000) * 1000;
 }
 
 /**

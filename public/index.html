@@ -386,23 +386,27 @@
               <p class="error-campo" data-error="prestamo"></p>
             </div>
             <div class="campo">
-              <label for="k-interes">Interés total</label>
+              <label for="k-interes">Interés por mes</label>
               <div class="dinero dinero-der"><input id="k-interes" name="interes" type="number" inputmode="decimal" min="0" step="any" value="20"><span>%</span></div>
             </div>
           </div>
           <div class="fila-2">
             <div class="campo">
-              <label for="k-cuotas">N° de cuotas</label>
-              <input id="k-cuotas" name="num_cuotas" type="number" inputmode="numeric" min="1" max="400" placeholder="6">
-              <p class="error-campo" data-error="num_cuotas"></p>
+              <label for="k-meses">Plazo en meses</label>
+              <input id="k-meses" name="meses" type="number" inputmode="decimal" min="0.5" max="36" step="0.5" placeholder="2">
             </div>
             <div class="campo">
-              <label for="k-valor-cuota">Valor de cuota</label>
-              <div class="dinero"><span>$</span><input id="k-valor-cuota" name="valor_cuota" inputmode="numeric" placeholder="Automático"></div>
-              <p class="error-campo" data-error="valor_cuota"></p>
+              <label for="k-cuotas">N° de cuotas</label>
+              <input id="k-cuotas" name="num_cuotas" type="number" inputmode="numeric" min="1" max="400" placeholder="Automático">
+              <p class="error-campo" data-error="num_cuotas"></p>
             </div>
           </div>
-          <p class="ayuda">La cuota se calcula sola (redondeada al mil); puedes cambiarla a mano.</p>
+          <div class="campo">
+            <label for="k-valor-cuota">Valor de cuota</label>
+            <div class="dinero"><span>$</span><input id="k-valor-cuota" name="valor_cuota" inputmode="numeric" placeholder="Automático"></div>
+            <p class="error-campo" data-error="valor_cuota"></p>
+          </div>
+          <p class="ayuda" id="ayuda-interes">Cada mes del plazo suma su interés. Las cuotas y su valor se calculan solos (redondeados al mil); puedes cambiarlos a mano.</p>
         </fieldset>
 
         <fieldset>

@@ -1,5 +1,5 @@
 import {
-  FORMAS_PAGO, cronograma, cuotaSugerida, primeraCuotaSugerida, estadoContrato, estaCerrado, hoyLocal, sumarDias, diasEntre,
+  FORMAS_PAGO, cronograma, cuotaSugerida, interesPorMeses, CUOTAS_POR_MES, primeraCuotaSugerida, estadoContrato, estaCerrado, hoyLocal, sumarDias, diasEntre,
 } from './calculos.js';
 import { resumenMora } from './logica.js';
 
@@ -662,7 +662,7 @@ function pintarContrato(k) {
         ${filaInfo('Últ. cuota', fechaCorta(e.fechaUltimaCuota))}
         ${filaInfo('Forma de pago', FORMAS_PAGO[k.forma_pago])}
         ${filaInfo('Préstamo', pesos(k.prestamo))}
-        ${filaInfo('Interés', `${String(k.interes).replace('.', ',')}%`)}
+        ${filaInfo('Interés total', `${String(k.interes).replace('.', ',')}%`)}
         ${filaInfo('Crédito', pesos(k.credito))}
         ${filaInfo('N° cuotas', k.num_cuotas)}
         ${filaInfo('Valor cuota', pesos(k.valor_cuota))}
@@ -783,7 +783,8 @@ $('#det-contenido').addEventListener('click', async (e) => {
 
 // ================= nuevo contrato =================
 const formK = $('#form-contrato');
-let cuotaManual = false;
+let cuotaManual = false;   // valor de la cuota escrito a mano
+let cuotasManual = false;  // número de cuotas escrito a mano (si no, sale del plazo en meses)
 let primeraManual = false;
 let clienteContrato = null;
 
@@ -795,6 +796,7 @@ function prepararFormContrato(c, viejo) {
   formK.reset();
   limpiarErroresDe(formK);
   cuotaManual = false;
+  cuotasManual = false;
   primeraManual = false;
   $('#contrato-cliente').textContent = capital(c.nombre);
   $('#contrato-titulo').textContent = viejo ? `Refinanciar contrato ${idCorto(viejo.id)}` : 'Nuevo contrato';
@@ -840,11 +842,18 @@ function recalcularContrato() {
   const forma = f.forma_pago.value;
   if (refinanciando) f.prestamo.value = formatoPesos(String(capitalRefinanciado()));
   const prestamo = leerPesos(f.prestamo.value);
+  const interesMes = Number(f.interes.value) || 0;
+  const meses = Number(f.meses.value) || 0;
+  // el plazo en meses da el número de cuotas (2 meses quincenal → 4), salvo que lo cambien a mano
+  if (!cuotasManual) f.num_cuotas.value = meses ? Math.max(1, Math.round(meses * CUOTAS_POR_MES[forma])) : '';
   const n = Number(f.num_cuotas.value) || 0;
-  const interes = Number(f.interes.value) || 0;
+  const interes = interesPorMeses(prestamo, interesMes, meses);
 
   if (f.fecha_inicio.value && !primeraManual) f.fecha_primera_cuota.value = primeraCuotaSugerida(f.fecha_inicio.value, forma);
   if (!cuotaManual) f.valor_cuota.value = formatoPesos(String(cuotaSugerida(prestamo, interes, n)));
+  $('#ayuda-interes').textContent = prestamo && meses && interesMes
+    ? `Interés: ${String(interesMes).replace('.', ',')}% de ${pesos(prestamo)} = ${pesos(interesPorMeses(prestamo, interesMes, 1))} por mes × ${String(meses).replace('.', ',')} ${meses === 1 ? 'mes' : 'meses'} = ${pesos(interes)}. Las cuotas y su valor se calculan solos; puedes cambiarlos a mano.`
+    : 'Cada mes del plazo suma su interés. Las cuotas y su valor se calculan solos (redondeados al mil); puedes cambiarlos a mano.';
 
   const ayudas = {
     D: 'Se cobra todos los días, menos los domingos.',
@@ -884,7 +893,8 @@ campoDinero(formK.elements.prestamo, recalcularContrato);
 campoDinero(formK.elements.adicional, recalcularContrato);
 $('#k-incluir-mora').addEventListener('change', recalcularContrato);
 campoDinero(formK.elements.valor_cuota, () => { cuotaManual = formK.elements.valor_cuota.value !== ''; recalcularContrato(); });
-formK.elements.num_cuotas.addEventListener('input', recalcularContrato);
+formK.elements.num_cuotas.addEventListener('input', () => { cuotasManual = formK.elements.num_cuotas.value !== ''; cuotaManual = false; recalcularContrato(); });
+formK.elements.meses.addEventListener('input', () => { cuotasManual = false; cuotaManual = false; recalcularContrato(); });
 formK.elements.interes.addEventListener('input', () => { cuotaManual = false; recalcularContrato(); });
 formK.elements.fecha_inicio.addEventListener('input', recalcularContrato);
 formK.elements.fecha_primera_cuota.addEventListener('input', () => { primeraManual = true; recalcularContrato(); });
