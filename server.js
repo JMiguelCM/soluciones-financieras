@@ -154,8 +154,9 @@ async function contratoCompleto(id) {
     db.una(`
       SELECT k.*, c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.telefono2 AS cliente_telefono2, c.whatsapp AS cliente_whatsapp,
         c.direccion AS cliente_direccion, c.direccion2 AS cliente_direccion2, c.ocupacion AS cliente_ocupacion,
-        c.ruta AS cliente_ruta, c.observaciones AS cliente_observaciones, u.nombre AS creado_por_nombre
+        c.ruta AS cliente_ruta, c.observaciones AS cliente_observaciones, u.nombre AS creado_por_nombre, ue.nombre AS editado_por_nombre
       FROM contratos k JOIN clientes c ON c.id = k.cliente_id LEFT JOIN usuarios u ON u.id = k.creado_por
+      LEFT JOIN usuarios ue ON ue.id = k.editado_por
       WHERE k.id = ?`, [id]),
     db.todas(`
       SELECT p.*, u.nombre AS creado_por_nombre, ua.nombre AS anulado_por_nombre
@@ -187,11 +188,12 @@ app.get('/api/contratos/:id', ruta(async (req, res) => {
 
 const INSERTAR_CONTRATO = `
   INSERT INTO contratos (cliente_id, fecha_inicio, fecha_primera_cuota, forma_pago, prestamo, interes,
-    num_cuotas, valor_cuota, credito, observaciones, creado_por, creado, refinancia_id, adicional)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    num_cuotas, valor_cuota, credito, observaciones, creado_por, creado, refinancia_id, adicional, interes_mes, meses)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 const valoresContrato = (k, usuarioId) => [
   k.cliente_id, k.fecha_inicio, k.fecha_primera_cuota, k.forma_pago, k.prestamo, k.interes,
   k.num_cuotas, k.valor_cuota, k.credito, k.observaciones, usuarioId, ahoraLocal(), k.refinancia_id ?? null, k.adicional ?? null,
+  k.interes_mes, k.meses,
 ];
 
 app.post('/api/contratos', ruta(async (req, res) => {
@@ -204,6 +206,36 @@ app.post('/api/contratos', ruta(async (req, res) => {
 
   const r = await db.ejecutar(INSERTAR_CONTRATO, valoresContrato(k, usuario.id));
   res.status(201).json(await contratoCompleto(r.id));
+}));
+
+// ---------- editar contrato ----------
+// Corrige valores, plazo y fechas. Los pagos, visitas y moras se conservan: el estado se recalcula solo.
+app.put('/api/contratos/:id', ruta(async (req, res) => {
+  const usuario = await usuarioActual(req);
+  if (!usuario) return sinUsuario(res);
+  const viejo = await contratoCompleto(Number(req.params.id));
+  if (!viejo) return res.status(404).json({ error: 'Contrato no encontrado.' });
+  if (viejo.refinanciado_por_id) {
+    return res.status(409).json({ error: `Este contrato ya fue refinanciado. Edita el contrato nuevo (#${String(viejo.refinanciado_por_id).padStart(2, '0')}).` });
+  }
+  const b = req.body ?? {};
+  // en un contrato que viene de refinanciar, el capital es el saldo trasladado: no se cambia
+  const prestamo = viejo.refinancia_id ? viejo.prestamo : b.prestamo;
+  const { k, errores } = leerContrato({ ...b, cliente_id: viejo.cliente_id, prestamo }, () => true);
+  const abonado = viejo.estado.abonoCredito || 0;
+  if (!errores.valor_cuota && k.credito < abonado) {
+    errores.valor_cuota = `Ya se abonaron ${abonado.toLocaleString('es-CO')}: el total del crédito no puede ser menor.`;
+  }
+  if (hayErrores(errores)) return responderErrores(res, errores);
+
+  await db.ejecutar(`
+    UPDATE contratos SET fecha_inicio = ?, fecha_primera_cuota = ?, forma_pago = ?, prestamo = ?, interes = ?,
+      num_cuotas = ?, valor_cuota = ?, credito = ?, observaciones = ?, interes_mes = ?, meses = ?, editado = ?, editado_por = ?
+    WHERE id = ?`, [
+    k.fecha_inicio, k.fecha_primera_cuota, k.forma_pago, k.prestamo, k.interes,
+    k.num_cuotas, k.valor_cuota, k.credito, k.observaciones, k.interes_mes, k.meses, ahoraLocal(), usuario.id, viejo.id,
+  ]);
+  res.json(await contratoCompleto(viejo.id));
 }));
 
 // ---------- pagos ----------

@@ -102,6 +102,10 @@ const COLUMNAS_NUEVAS = {
     saldo_trasladado: 'INTEGER',                              // saldo del crédito que pasó al nuevo
     mora_trasladada: 'INTEGER',                               // mora pendiente que pasó al nuevo
     adicional: 'INTEGER',                                     // dinero nuevo entregado al refinanciar
+    interes_mes: 'REAL',                                      // % de interés por cada mes del plazo
+    meses: 'REAL',                                            // plazo en meses (da el interés total)
+    editado: 'TEXT',                                          // última vez que se corrigió el contrato
+    editado_por: 'INTEGER REFERENCES usuarios(id)',
   },
 };
 

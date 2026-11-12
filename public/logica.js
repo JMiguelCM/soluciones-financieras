@@ -68,6 +68,11 @@ export function leerCliente(body) {
 }
 
 // ---------- contratos ----------
+const numeroOpcional = (v) => {
+  const n = Number(v);
+  return v === '' || v == null || !Number.isFinite(n) || n < 0 ? null : Math.round(n * 100) / 100;
+};
+
 export function leerContrato(body, clienteExiste) {
   const k = {
     cliente_id: Number(body.cliente_id),
@@ -78,6 +83,8 @@ export function leerContrato(body, clienteExiste) {
     num_cuotas: entero(body.num_cuotas),
     valor_cuota: entero(body.valor_cuota),
     observaciones: texto(body.observaciones) || null,
+    interes_mes: numeroOpcional(body.interes_mes),
+    meses: numeroOpcional(body.meses),
   };
 
   const errores = {};

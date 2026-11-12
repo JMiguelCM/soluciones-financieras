@@ -618,6 +618,7 @@ function pintarContrato(k) {
       ${!cerrado ? `<button class="btn btn-color btn-naranja-sf" type="button" id="k-visitar">${icono('arrow')} Visitar nuevamente</button>` : ''}
       ${!cerrado ? `<button class="btn btn-color btn-rojo-sf" type="button" id="k-no-pago">${icono('x')} No pagó</button>` : ''}
       <button class="btn btn-color btn-celeste-sf" type="button" id="k-info">${icono('file')} Info. contrato</button>
+      ${e.estado !== 'refinanciado' ? `<button class="btn btn-color btn-gris-sf" type="button" id="k-editar">${icono('edit')} Editar contrato</button>` : ''}
       ${e.estado !== 'refinanciado' ? `<button class="btn btn-color btn-celeste-sf" type="button" id="k-mora-boton">${icono('alert')} Int. de mora</button>` : ''}
     </div>
 
@@ -662,6 +663,7 @@ function pintarContrato(k) {
         ${filaInfo('Últ. cuota', fechaCorta(e.fechaUltimaCuota))}
         ${filaInfo('Forma de pago', FORMAS_PAGO[k.forma_pago])}
         ${filaInfo('Préstamo', pesos(k.prestamo))}
+        ${k.interes_mes != null && k.meses ? filaInfo('Interés', `${String(k.interes_mes).replace('.', ',')}% × ${String(k.meses).replace('.', ',')} ${k.meses === 1 ? 'mes' : 'meses'}`) : ''}
         ${filaInfo('Interés total', `${String(k.interes).replace('.', ',')}%`)}
         ${filaInfo('Crédito', pesos(k.credito))}
         ${filaInfo('N° cuotas', k.num_cuotas)}
@@ -719,6 +721,7 @@ function pintarContrato(k) {
 
     <div class="ficha-meta">
       Creado ${esc(k.creado)}${k.creado_por_nombre ? ` por ${esc(capital(k.creado_por_nombre))}` : ''}
+      ${k.editado ? `<br>Editado ${esc(k.editado)}${k.editado_por_nombre ? ` por ${esc(capital(k.editado_por_nombre))}` : ''}` : ''}
     </div>`;
 
   $('#det-contenido').scrollTop = 0;
@@ -728,6 +731,7 @@ function pintarContrato(k) {
   });
   $('#k-pagar')?.addEventListener('click', () => abrirPago(contratoAbierto));
   $('#k-refinanciar')?.addEventListener('click', () => abrirRefinanciar(contratoAbierto));
+  $('#k-editar')?.addEventListener('click', () => abrirEditarContrato(contratoAbierto));
   const desdeContrato = (motivo) => abrirNoPago({
     contrato_id: k.id,
     cliente_nombre: k.cliente_nombre,
@@ -788,22 +792,43 @@ let primeraManual = false;
 let clienteContrato = null;
 
 let refinanciando = null; // contrato viejo cuando el formulario está en modo refinanciar
+let editando = null;      // contrato que se está corrigiendo
 
-function prepararFormContrato(c, viejo) {
+function prepararFormContrato(c, viejo, aEditar = null) {
   clienteContrato = c;
   refinanciando = viejo;
+  editando = aEditar;
   formK.reset();
   limpiarErroresDe(formK);
   cuotaManual = false;
   primeraManual = false;
   $('#contrato-cliente').textContent = capital(c.nombre);
-  $('#contrato-titulo').textContent = viejo ? `Refinanciar contrato ${idCorto(viejo.id)}` : 'Nuevo contrato';
-  $('#btn-guardar-contrato').lastChild.textContent = viejo ? ' Refinanciar' : ' Crear contrato';
+  $('#contrato-titulo').textContent = aEditar ? `Editar contrato ${idCorto(aEditar.id)}` : viejo ? `Refinanciar contrato ${idCorto(viejo.id)}` : 'Nuevo contrato';
+  $('#btn-guardar-contrato').lastChild.textContent = aEditar ? ' Guardar cambios' : viejo ? ' Refinanciar' : ' Crear contrato';
   $('#k-refi').hidden = !viejo;
-  formK.elements.prestamo.readOnly = Boolean(viejo);
-  formK.elements.prestamo.closest('.campo').querySelector('label').textContent = viejo ? 'Capital del nuevo contrato' : 'Valor prestado';
+  const capitalFijo = Boolean(viejo || aEditar?.refinancia_id);
+  formK.elements.prestamo.readOnly = capitalFijo;
+  formK.elements.prestamo.closest('.campo').querySelector('label').textContent = capitalFijo ? 'Capital del contrato' : 'Valor prestado';
   formK.elements.fecha_inicio.value = hoyLocal();
   formK.elements.interes.value = 20;
+  $('#k-editar-aviso').hidden = !aEditar;
+  if (aEditar) {
+    const f = formK.elements;
+    formK.querySelector(`[name="forma_pago"][value="${aEditar.forma_pago}"]`).checked = true;
+    f.prestamo.value = formatoPesos(String(aEditar.prestamo));
+    f.interes.value = aEditar.interes_mes ?? 20;
+    f.meses.value = aEditar.meses ?? String(Math.round((aEditar.num_cuotas / CUOTAS_POR_MES[aEditar.forma_pago]) * 100) / 100);
+    f.valor_cuota.value = formatoPesos(String(aEditar.valor_cuota));
+    f.fecha_inicio.value = aEditar.fecha_inicio;
+    f.fecha_primera_cuota.value = aEditar.fecha_primera_cuota;
+    f.observaciones.value = aEditar.observaciones ?? '';
+    cuotaManual = true;   // se conserva la cuota guardada hasta que cambien plazo, interés o cuotas
+    primeraManual = true;
+    const abonado = aEditar.estado.abonoCredito || 0;
+    $('#k-editar-aviso').textContent = abonado
+      ? `Este contrato ya tiene ${pesos(abonado)} abonados. Los pagos se conservan y el saldo y los atrasos se recalculan con los valores nuevos.`
+      : 'Corrige los valores del contrato. Los cambios se aplican al guardar.';
+  }
   if (viejo) {
     formK.querySelector(`[name="forma_pago"][value="${viejo.forma_pago}"]`).checked = true;
     const e = viejo.estado;
@@ -823,6 +848,10 @@ function prepararFormContrato(c, viejo) {
 
 function abrirNuevoContrato(c) {
   prepararFormContrato(c, null);
+}
+
+function abrirEditarContrato(k) {
+  prepararFormContrato({ id: k.cliente_id, nombre: k.cliente_nombre }, null, k);
 }
 
 function abrirRefinanciar(k) {
@@ -849,9 +878,12 @@ function recalcularContrato() {
 
   if (f.fecha_inicio.value && !primeraManual) f.fecha_primera_cuota.value = primeraCuotaSugerida(f.fecha_inicio.value, forma);
   if (!cuotaManual) f.valor_cuota.value = formatoPesos(String(cuotaSugerida(prestamo, interes, n)));
-  $('#ayuda-interes').textContent = prestamo && meses && interesMes
+  const sugerida = cuotaSugerida(prestamo, interes, n);
+  $('#ayuda-interes').innerHTML = (prestamo && meses && interesMes
     ? `Interés: ${String(interesMes).replace('.', ',')}% de ${pesos(prestamo)} = ${pesos(interesPorMeses(prestamo, interesMes, 1))} por mes × ${String(meses).replace('.', ',')} ${meses === 1 ? 'mes' : 'meses'} = ${pesos(interes)}. Las cuotas y su valor se calculan solos; puedes cambiarlos a mano.`
-    : 'Cada mes del plazo suma su interés. Las cuotas y su valor se calculan solos (redondeados al mil); puedes cambiarlos a mano.';
+    : 'Cada mes del plazo suma su interés. Las cuotas y su valor se calculan solos (redondeados al mil); puedes cambiarlos a mano.')
+    + (cuotaManual && sugerida && sugerida !== leerPesos(f.valor_cuota.value)
+      ? ` <button type="button" class="enlace-sugerida" id="usar-sugerida">Usar cuota con interés por mes: ${pesos(sugerida)}</button>` : '');
 
   const ayudas = {
     D: 'Se cobra todos los días, menos los domingos.',
@@ -899,6 +931,11 @@ formK.elements.num_cuotas.addEventListener('input', () => {
   cuotaManual = false;
   recalcularContrato();
 });
+$('#ayuda-interes').addEventListener('click', (e) => {
+  if (!e.target.closest('#usar-sugerida')) return;
+  cuotaManual = false;
+  recalcularContrato();
+});
 formK.elements.meses.addEventListener('input', () => { cuotaManual = false; recalcularContrato(); });
 formK.elements.interes.addEventListener('input', () => { cuotaManual = false; recalcularContrato(); });
 formK.elements.fecha_inicio.addEventListener('input', recalcularContrato);
@@ -936,9 +973,14 @@ formK.addEventListener('submit', async (e) => {
       fecha_inicio: f.fecha_inicio.value,
       fecha_primera_cuota: f.fecha_primera_cuota.value,
       observaciones: f.observaciones.value,
+      interes_mes: f.interes.value,
+      meses: f.meses.value,
     };
     const viejo = refinanciando;
-    const k = viejo
+    const corregido = editando;
+    const k = corregido
+      ? await api('PUT', `/api/contratos/${corregido.id}`, datosContrato)
+      : viejo
       ? await api('POST', `/api/contratos/${viejo.id}/refinanciar`, {
         ...datosContrato,
         adicional: leerPesos(f.adicional.value),
@@ -950,7 +992,7 @@ formK.addEventListener('submit', async (e) => {
     if (pagina === 'planilla') cargarPlanilla();
     pintarContrato(k);
     if (!$('#dlg-detalle').open) $('#dlg-detalle').showModal();
-    aviso(viejo ? `Contrato ${idCorto(viejo.id)} refinanciado en el ${idCorto(k.id)}` : `Contrato ${idCorto(k.id)} creado`);
+    aviso(corregido ? `Contrato ${idCorto(k.id)} actualizado` : viejo ? `Contrato ${idCorto(viejo.id)} refinanciado en el ${idCorto(k.id)}` : `Contrato ${idCorto(k.id)} creado`);
   } catch (ex) {
     if (ex.campos) mostrarErroresCampos(formK, ex.campos);
     else aviso(ex.message);
