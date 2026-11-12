@@ -20,7 +20,7 @@ const db = await abrirBase();
 // la restauración de una copia puede traer muchos datos
 app.use('/api/respaldo/restaurar', express.json({ limit: '50mb' }));
 app.use(express.json());
-app.use(express.static(join(raiz, 'public')));
+app.use(express.static(join(raiz, 'public'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 
 // ---------- clave de acceso ----------
 // En internet cualquiera con el enlace podría entrar: si CLAVE_ACCESO está definida,

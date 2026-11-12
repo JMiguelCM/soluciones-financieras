@@ -882,8 +882,19 @@ function recalcularContrato() {
   $('#ayuda-interes').innerHTML = (prestamo && meses && interesMes
     ? `Interés: ${String(interesMes).replace('.', ',')}% de ${pesos(prestamo)} = ${pesos(interesPorMeses(prestamo, interesMes, 1))} por mes × ${String(meses).replace('.', ',')} ${meses === 1 ? 'mes' : 'meses'} = ${pesos(interes)}. Las cuotas y su valor se calculan solos; puedes cambiarlos a mano.`
     : 'Cada mes del plazo suma su interés. Las cuotas y su valor se calculan solos (redondeados al mil); puedes cambiarlos a mano.')
-    + (cuotaManual && sugerida && sugerida !== leerPesos(f.valor_cuota.value)
-      ? ` <button type="button" class="enlace-sugerida" id="usar-sugerida">Usar cuota con interés por mes: ${pesos(sugerida)}</button>` : '');
+;
+  // al editar: siempre a la vista la cuota que da el interés por mes, para pasar contratos viejos a la regla nueva
+  const cajaSugerida = $('#k-sugerida');
+  cajaSugerida.hidden = !editando || !sugerida;
+  if (editando && sugerida) {
+    const vcActual = leerPesos(f.valor_cuota.value);
+    const detalle = `${String(interesMes).replace('.', ',')}% × ${String(meses).replace('.', ',')} ${meses === 1 ? 'mes' : 'meses'}`;
+    cajaSugerida.classList.toggle('ok', sugerida === vcActual);
+    cajaSugerida.innerHTML = sugerida === vcActual
+      ? `${icono('check')} <span>La cuota ya corresponde al interés por mes (${detalle}).</span>`
+      : `<span>Con interés por mes (${detalle}) la cuota sería <strong>${pesos(sugerida)}</strong> y el total <strong>${pesos(sugerida * n)}</strong>.</span>
+         <button type="button" class="btn btn-primario" id="usar-sugerida">Aplicar interés por mes</button>`;
+  }
 
   const ayudas = {
     D: 'Se cobra todos los días, menos los domingos.',
@@ -931,7 +942,7 @@ formK.elements.num_cuotas.addEventListener('input', () => {
   cuotaManual = false;
   recalcularContrato();
 });
-$('#ayuda-interes').addEventListener('click', (e) => {
+$('#k-sugerida').addEventListener('click', (e) => {
   if (!e.target.closest('#usar-sugerida')) return;
   cuotaManual = false;
   recalcularContrato();
