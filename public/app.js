@@ -1261,7 +1261,9 @@ const form = $('#form-cliente');
 const chkWa = $('#f-mismo-wa');
 
 function pintarSugerencias() {
-  const usadas = clientes.map((c) => c.ocupacion);
+  // los nombres de empresa (S.A.S, LTDA…) no se ofrecen como opción: son de un cliente en particular
+  const esEmpresa = (o) => /(^|[\s.])(S\.?\s?A\.?\s?S|LTDA|S\.\s?A|E\.\s?U)\.?($|[\s.,])/i.test(o);
+  const usadas = clientes.map((c) => c.ocupacion).filter((o) => o && !esEmpresa(o));
   const todas = [...new Set([...OCUPACIONES_BASE, ...usadas])].slice(0, 10);
   const actual = form.elements.ocupacion.value.trim().toUpperCase();
   $('#sug-ocupacion').innerHTML = todas.map((o) =>
