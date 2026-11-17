@@ -1035,9 +1035,6 @@ function abrirPago(k) {
   $('#p-mora-rapido').innerHTML = k.mora?.saldo
     ? `<button type="button" data-mora="${k.mora.saldo}">Abonar toda la mora · ${pesos(k.mora.saldo)}</button>`
     : '';
-  $('#p-mora-ayuda').textContent = k.mora?.saldo
-    ? 'Abona al saldo de interés de mora. No baja el saldo del crédito.'
-    : 'No tiene mora aplicada; si cobras algo de mora, queda registrado aparte.';
 
   const rapidos = [];
   const faltaCuota = k.valor_cuota - e.picos;
@@ -1113,7 +1110,7 @@ formP.addEventListener('submit', async (e) => {
     const abono = leerPesos(f.abono.value);
     const mora = leerPesos(f.int_mora.value);
     const k = await api('POST', `/api/contratos/${contratoAbierto.id}/pagos`, {
-      fecha: f.fecha.value, abono, int_mora: mora, observacion: f.observacion.value,
+      fecha: f.fecha.value, abono, int_mora: mora,
     });
     $('#dlg-pago').close();
     pintarContrato(k);
