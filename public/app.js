@@ -560,9 +560,9 @@ function pintarContrato(k) {
         <div class="pago-info">
           <div class="pago-valor">${pesos(p.abono)}${p.int_mora ? ` <span class="sub">+ ${pesos(p.int_mora)} mora</span>` : ''}</div>
           <div class="sub">${fechaCorta(p.fecha)} · ${esc(capital(p.creado_por_nombre ?? ''))}${p.observacion ? ` · ${esc(p.observacion)}` : ''}</div>
-          ${p.anulado ? `<div class="sub">Anulado por ${esc(capital(p.anulado_por_nombre ?? ''))} el ${esc(p.anulado_en)}</div>` : ''}
+          ${p.anulado ? `<div class="sub">Eliminado por ${esc(capital(p.anulado_por_nombre ?? ''))} el ${esc(p.anulado_en)}</div>` : ''}
         </div>
-        ${p.anulado ? '<span class="etiqueta etiqueta-gris">Anulado</span>' : `<span class="pago-botones"><button class="btn-chico" type="button" data-recibo="${p.id}">${icono('copy')} Mensaje</button><button class="btn-chico btn-chico-peligro" type="button" data-anular="${p.id}">Anular</button></span>`}
+        ${p.anulado ? '<span class="etiqueta etiqueta-gris">Eliminado</span>' : `<span class="pago-botones"><button class="btn-chico" type="button" data-recibo="${p.id}">${icono('copy')} Mensaje</button><button class="btn-chico btn-chico-peligro" type="button" data-anular="${p.id}">${icono('x')} Eliminar</button></span>`}
       </li>`).join('')
     : '<p class="sub vacio-chico">Aún no hay pagos registrados.</p>';
 
@@ -770,20 +770,26 @@ $('#det-contenido').addEventListener('click', async (e) => {
     return;
   }
   const anular = e.target.closest('[data-anular]');
-  if (anular) {
-    const p = contratoAbierto.pagos.find((x) => x.id === Number(anular.dataset.anular));
-    if (!confirm(`¿Anular el pago de ${pesos(p.abono + p.int_mora)} del ${fechaCorta(p.fecha)}?\nEl saldo del contrato volverá a subir.`)) return;
-    try {
-      const k = await api('POST', `/api/pagos/${p.id}/anular`);
-      pintarContrato(k);
-      cargarClientes();
-      if (pagina === 'planilla') cargarPlanilla();
-      aviso('Pago anulado');
-    } catch (ex) {
-      aviso(ex.message);
-    }
-  }
+  if (anular) await eliminarPago(contratoAbierto, Number(anular.dataset.anular));
 });
+
+/** Elimina (anula) un pago: deja de contar para el saldo y la planilla; queda tachado en el historial. */
+async function eliminarPago(k, pagoId) {
+  const p = k.pagos.find((x) => x.id === pagoId);
+  if (!p || p.anulado) return null;
+  if (!confirm(`¿Eliminar el pago de ${pesos(p.abono + (p.int_mora || 0))} del ${fechaCorta(p.fecha)}?\nEl saldo del contrato vuelve a subir.`)) return null;
+  try {
+    const nuevo = await api('POST', `/api/pagos/${p.id}/anular`);
+    pintarContrato(nuevo);
+    cargarClientes();
+    if (pagina === 'planilla') cargarPlanilla();
+    aviso('Pago eliminado');
+    return nuevo;
+  } catch (ex) {
+    aviso(ex.message);
+    return null;
+  }
+}
 
 // ================= nuevo contrato =================
 const formK = $('#form-contrato');
@@ -1160,8 +1166,11 @@ function mensajePago(k, pagoId) {
   ].filter(Boolean).join(' ');
 }
 
+let reciboAbierto = null; // { k, pagoId } del recibo en pantalla
+
 function abrirRecibo(k, pagoId, recienRegistrado) {
   const pago = k.pagos.find((p) => p.id === pagoId);
+  reciboAbierto = { k, pagoId };
   $('#recibo-titulo').textContent = recienRegistrado ? 'Pago registrado' : 'Mensaje del pago';
   $('#recibo-sub').textContent = `Contrato ${idCorto(k.id)} · ${capital(k.cliente_nombre)} · ${fechaCorta(pago.fecha)}`;
   $('#recibo-ok').hidden = !recienRegistrado;
@@ -1183,6 +1192,15 @@ function abrirRecibo(k, pagoId, recienRegistrado) {
   }
   $('#dlg-recibo').showModal();
 }
+
+$('#btn-eliminar-pago').addEventListener('click', async () => {
+  if (!reciboAbierto) return;
+  const nuevo = await eliminarPago(reciboAbierto.k, reciboAbierto.pagoId);
+  if (!nuevo) return;
+  $('#dlg-recibo').close();
+  // lo normal es registrar enseguida el valor correcto
+  if (!estaCerrado(nuevo.estado.estado)) abrirPago(nuevo);
+});
 
 $('#btn-copiar-recibo').addEventListener('click', async () => {
   await copiar($('#recibo-texto').value);

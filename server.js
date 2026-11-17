@@ -265,7 +265,7 @@ function rutaAnular(tabla, nombre, yaAnulado) {
     res.json(await contratoCompleto(fila.contrato_id));
   });
 }
-app.post('/api/pagos/:id/anular', rutaAnular('pagos', 'Pago', 'Ese pago ya estaba anulado.'));
+app.post('/api/pagos/:id/anular', rutaAnular('pagos', 'Pago', 'Ese pago ya estaba eliminado.'));
 
 // ---------- visitas sin pago ("No pagó") ----------
 app.post('/api/contratos/:id/visitas', ruta(async (req, res) => {

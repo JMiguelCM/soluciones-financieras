@@ -512,6 +512,10 @@
       <label for="recibo-texto">Mensaje para el cliente</label>
       <textarea id="recibo-texto" class="recibo-texto" rows="7" readonly></textarea>
       <p class="ayuda">"Enviar" copia el mensaje y abre el WhatsApp del cliente con el texto ya escrito; solo falta darle enviar.</p>
+      <button class="btn btn-borrar-pago" type="button" id="btn-eliminar-pago">
+        <svg class="ic"><use href="#i-x"/></svg> Eliminar este pago
+      </button>
+      <p class="ayuda" id="ayuda-eliminar-pago">Si el valor quedó mal, elimínalo y registra el correcto.</p>
     </div>
     <div class="hoja-pie pie-recibo">
       <a class="btn btn-wa" id="btn-wa-recibo" target="_blank" rel="noopener">

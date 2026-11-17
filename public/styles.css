@@ -959,3 +959,8 @@ input:focus, textarea:focus { border-color: #66afe9; box-shadow: inset 0 1px 1px
 .caja-sugerida .btn { flex: 0 0 auto; }
 .caja-sugerida.ok { background: #e8f6ec; border-color: #b7e2c3; color: #1e6b34; }
 .caja-sugerida .ic { width: 18px; height: 18px; flex: 0 0 auto; }
+
+/* ============ Eliminar pago desde el recibo ============ */
+.btn-borrar-pago { width: 100%; margin-top: 14px; background: #fff; color: #dc3545; border: 1px solid #dc3545; }
+.btn-borrar-pago:hover { background: #fdecee; }
+#ayuda-eliminar-pago { text-align: center; margin-top: 6px; }
